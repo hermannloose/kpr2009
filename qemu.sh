@@ -1,3 +1,4 @@
 #!/bin/bash
 
-qemu -tftp `pwd`/tftpboot -bootp  /boot/grub/pxegrub -boot n -m 512 -serial stdio -no-reboot
+kvm -no-kvm -tftp `pwd`/tftpboot -bootp /boot/grub/pxegrub -boot n -m 512 -serial stdio -no-reboot
+#qemu -tftp `pwd`/tftpboot -bootp  /boot/grub/pxegrub -boot n -m 512 -serial stdio -no-reboot
