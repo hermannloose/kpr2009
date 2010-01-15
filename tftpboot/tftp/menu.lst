@@ -1,0 +1,39 @@
+default 2
+timeout 2
+
+title Pong
+ kernel /bin/x86_586/bootstrap
+ modaddr 0x02000000
+ module /bin/fiasco -serial_esc -jdb_cmd=JS
+ module /bin/x86_586/l4f/sigma0
+ module /bin/x86_586/l4f/moe rom/cfg.pong
+ module /bin/x86_586/l4f/l4re
+ module /bin/x86_586/l4f/pong-server
+ module /bin/x86_586/l4f/pong-client
+ module /conf/cfg.pong
+ vbeset 0x117
+
+
+title Client-Server
+ kernel /bin/x86_586/bootstrap
+ modaddr 0x02000000
+ module /bin/fiasco -serial_esc -jdb_cmd=JS
+ module /bin/x86_586/l4f/sigma0
+ module /bin/x86_586/l4f/moe rom/cfg.client-server
+ module /bin/x86_586/l4f/l4re
+ module /bin/x86_586/l4f/ex_clntsrv-server
+ module /bin/x86_586/l4f/ex_clntsrv-client
+ module /conf/cfg.client-server
+
+title Hello-IPC
+ kernel /bin/x86_586/bootstrap
+ modaddr 0x02000000
+ module /bin/fiasco -serial_esc -jdb_cmd=JS
+ module /bin/x86_586/l4f/sigma0
+ module /bin/x86_586/l4f/moe rom/cfg.moe
+ module /bin/x86_586/l4f/l4re
+ module /bin/x86_586/l4f/loader
+ module /bin/x86_586/l4f/hello_client
+ module /bin/x86_586/l4f/hello_server
+ module /conf/cfg.moe
+ module /conf/cfg.loader

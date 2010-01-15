@@ -1,0 +1,19 @@
+[namespace:hello_server]
+	rom = rom;
+	hello_server;
+
+[namespace:hello_client]
+	rom = rom;
+	hello_server = ns/hello_server/hello_server;
+
+rom/hello_server
+	ns = ns/hello_server, rw;
+	log = logger->open("server", red);
+
+rom/hello_client client1 "First!!!111!!eleven"
+	ns = ns/hello_client;
+	log = logger->open("client1", blue);
+
+rom/hello_client client2 "ZOMG LOL SECUND!"
+	ns = ns/hello_client;
+	log = logger->open("client2", green);

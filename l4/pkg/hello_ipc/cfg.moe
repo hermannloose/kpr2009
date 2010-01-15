@@ -1,0 +1,14 @@
+[namespace:server]
+  rom = rom;
+  service;
+
+[namespace:loader]
+  rom = rom;
+  server = ns/server/service;
+
+rom/hello_server
+  ns = ns/server, rw;
+  log = logger->open("server", red);
+
+rom/loader cfg.loader
+  ns = ns/loader;

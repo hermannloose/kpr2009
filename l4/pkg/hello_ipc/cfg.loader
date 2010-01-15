@@ -1,0 +1,7 @@
+[namespace:client]
+  rom = rom;
+  srv = server->open();
+
+rom/hello_client foo "Barbarbarbar!"
+  ns = ns/client;
+  log = logger->open("client", blue);
