@@ -1,4 +1,5 @@
-build
-doc
-kernel
-tools
+build/
+doc/
+kernel/
+Makefile
+tools/
