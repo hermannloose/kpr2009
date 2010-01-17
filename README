@@ -1,1 +1,1 @@
-This is just because Git doesn't seem to like an all empty repository.
+If qemu.sh gets stuck on "Calibrating timer loop ...", try the kvm.sh start script!
