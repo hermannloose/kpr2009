@@ -11,6 +11,8 @@ class Console_server : public L4::Server_object
 {
   private:
     L4::Cap<L4Re::Framebuffer> fb;
+    l4_addr_t base_addr;
+    
   public:
     Console_server();
     int dispatch(l4_umword_t obj, L4::Ipc_iostream &ios);

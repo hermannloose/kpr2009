@@ -1,5 +1,7 @@
 #include <l4/console/console.h>
 
+#include <l4/libgfxbitmap/font.h>
+
 #include <l4/re/fb>
 #include <l4/re/env>
 #include <l4/re/util/cap_alloc>
@@ -20,6 +22,34 @@ Console_server::Console_server()
     printf("Could not get framebuffer capability!\n");
     exit(1);
   }
+  L4Re::Framebuffer::Info info;
+  if(fb->info(&info)){
+    printf("Could not get framebuffer info!\n");
+    exit(1);
+  }
+  printf("Framebuffer size: %i x %i.\n", info.x_res, info.y_res);
+  L4::Cap<L4Re::Dataspace> ds = L4Re::Util::cap_alloc.alloc<L4Re::Dataspace>();
+  if(!ds.is_valid()){
+    printf("Could not get dataspace capability!\n");
+    exit(1);
+  }
+  fb->mem(ds);
+  base_addr = 0;
+  if(L4Re::Env::env()->rm()->attach(&base_addr, ds->size(), L4Re::Rm::Search_addr, ds, 0)){
+    printf("Could not attach dataspace in region map!\n");
+    exit(1);
+  }
+  gfxbitmap_font_init();
+  // Hello World!
+  gfxbitmap_font_text(
+    &base_addr,
+    (l4re_fb_info_t*) &info,
+    (void*) GFXBITMAP_DEFAULT_FONT,
+    "Hello World!", GFXBITMAP_USE_STRLEN,
+    10, 10 + gfxbitmap_font_height((void*) GFXBITMAP_DEFAULT_FONT),
+    0xffffff,
+    0
+  );
 }
 
 int Console_server::dispatch(l4_umword_t obj, L4::Ipc_iostream &ios)
@@ -38,5 +68,7 @@ int main(int argc, char **argv)
     printf("Could not register service, probably read-only namespace.\n");
     return 1;
   }
+  printf("Console server started.\n");
+  server.loop();
   return 0;
 }
