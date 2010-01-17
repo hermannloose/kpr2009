@@ -10,3 +10,5 @@ SRC_CC	      = mem.cc
 include $(L4DIR)/mk/lib.mk
 
 LDFLAGS := $(filter-out -gc-sections,$(LDFLAGS))
+
+L4_MULTITHREADED = y

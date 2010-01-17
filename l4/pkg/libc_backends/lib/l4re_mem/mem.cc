@@ -16,6 +16,8 @@
 #include <l4/sys/kdebug.h>
 #include <l4/sys/l4int.h>
 
+//#include <pthread.h>
+
 
 const unsigned EXTENSION_SIZE = 32768; // 32k 
 
@@ -30,8 +32,11 @@ typedef struct mem_list_entry
 
 mle list_head = {&list_head, 0, 0};
 
+//static pthread_mutex_t mutex;
+
 void *malloc(unsigned size) throw()
 {
+  //pthread_mutex_lock(&mutex);
 	//enter_kdebug("malloc");
 	printf("=== malloc: %i bytes requested. ===\n", size);
 	mle *next = &list_head;
@@ -59,7 +64,9 @@ void *malloc(unsigned size) throw()
 			//printf("(old) %08p [%08p -> %08p]\n next %08p\n size %i bytes\n flag %08x\n", next, (next + 1), ((char*) (next + 1) + next->size - 1), next->next, next->size, next->flags);
 			// if not, just return the whole thing
 			//printf("Returning [%08x - %08x].\n", (next + 1), (((char*) next->next) - 1));
-			return (void*) (next + 1);
+			void *ret_split = (void*) (next + 1);
+			//pthread_mutex_unlock(&mutex);
+			return ret_split;
 		}
 		else
 		{
@@ -101,7 +108,9 @@ void *malloc(unsigned size) throw()
 	//printf("Returning %08p [%08p -> %08p]\n next %08p\n size %i bytes\n flag %08x\n", ret, (ret->next + 1), ((char*) (ret + 1) + ret->size - 1), ret->next, ret->size, ret->flags);
 	//printf("Returning [%08x - %08x].\n", (ret + 1), (((char*) ret->next) - 1));
 	printf("=== malloc: returning %08p. ===\n", (void*) (ret + 1));
-	return (void*) (ret + 1);
+	void *ret_new = (void*) (ret + 1);
+	//pthread_mutex_unlock(&mutex);
+	return ret_new;
 	/*
 	void *data = 0;
 	enter_kdebug("malloc");
