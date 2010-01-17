@@ -8,6 +8,10 @@
 #include <l4/re/util/object_registry>
 #include <l4/sys/types.h>
 
+#include <iostream>
+#include <list>
+#include <string>
+
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -22,7 +26,6 @@ Console_server::Console_server()
     printf("Could not get framebuffer capability!\n");
     exit(1);
   }
-  L4Re::Framebuffer::Info info;
   if(fb->info(&info)){
     printf("Could not get framebuffer info!\n");
     exit(1);
@@ -41,7 +44,7 @@ Console_server::Console_server()
   }
   gfxbitmap_font_init();
   // Hello World!
-  gfxbitmap_font_text(
+  /*gfxbitmap_font_text(
     &base_addr,
     (l4re_fb_info_t*) &info,
     (void*) GFXBITMAP_DEFAULT_FONT,
@@ -49,12 +52,40 @@ Console_server::Console_server()
     10, 10 + gfxbitmap_font_height((void*) GFXBITMAP_DEFAULT_FONT),
     0xffffff,
     0
-  );
+  );*/
+
+  history = new std::list<std::string>();
+  history->push_back("Console started.");
+  history->push_back("Hello World!");
+  render();
 }
 
 int Console_server::dispatch(l4_umword_t obj, L4::Ipc_iostream &ios)
 {
   return 0;
+}
+
+void Console_server::render()
+{
+  int font_height = gfxbitmap_font_height((void*) GFXBITMAP_DEFAULT_FONT);
+  int x = 1;
+  int y = 1 + font_height;
+  std::cout << "=== Rendering ===" << std::endl;
+  std::list<std::string>::iterator iter;
+  for(iter = history->begin(); iter != history->end(); iter++){
+    std::cout << *iter << std::endl;
+    gfxbitmap_font_text(
+      &base_addr,
+      (l4re_fb_info_t*) &info,
+      (void*) GFXBITMAP_DEFAULT_FONT,
+      iter->c_str(), GFXBITMAP_USE_STRLEN,
+      x, y,
+      0xffffff, 0
+    );
+    y += font_height + 1;
+    if(y > info.y_res) break;
+  }
+  std::cout << "=== Finished! ===" << std::endl;
 }
 
 int main(int argc, char **argv)

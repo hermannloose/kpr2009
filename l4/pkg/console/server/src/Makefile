@@ -8,6 +8,6 @@ SRC_C		=
 SRC_CC          = console.cc
 
 # list requirements of your program here
-REQUIRES_LIBS   = libgfxbitmap
+REQUIRES_LIBS   = libstdc++ libgfxbitmap
 
 include $(L4DIR)/mk/prog.mk
