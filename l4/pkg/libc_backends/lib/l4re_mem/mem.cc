@@ -32,7 +32,7 @@ mle list_head = {&list_head, 0, 0};
 
 void *malloc(unsigned size) throw()
 {
-	enter_kdebug("malloc");
+	//enter_kdebug("malloc");
 	//printf("=== malloc: %i bytes requested. ===\n", size);
 	mle *next = &list_head;
 	mle *prev = next;
@@ -112,9 +112,10 @@ void *malloc(unsigned size) throw()
 void free(void *p) throw()
 {
 	//printf("Free: %08p\n", p);
-	enter_kdebug("Entering free.");
+	//enter_kdebug("Entering free.");
+	// FIXME free() does nothing, for the purpose of tracking down the "Operation not permitted" bug.
 	// just mark chunk as free, without any compaction yet
-	mle *to_free = (mle*) p - 1;
-	to_free->flags = to_free->flags | EMPTY;
-	enter_kdebug("Exiting free.");
+	//mle *to_free = (mle*) p - 1;
+	//to_free->flags = to_free->flags | EMPTY;
+	//enter_kdebug("Exiting free.");
 }
