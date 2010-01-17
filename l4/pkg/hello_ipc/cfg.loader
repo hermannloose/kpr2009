@@ -5,3 +5,4 @@
 rom/hello_client foo "Barbarbarbar!"
   ns = ns/client, rw;
   log = logger->open("client", blue);
+  l4re_dbg = all;

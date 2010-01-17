@@ -9,6 +9,8 @@
 rom/hello_server
   ns = ns/server, rw;
   log = logger->open("server", red);
+  l4re_dbg = all;
 
 rom/loader cfg.loader
   ns = ns/loader, rw;
+  l4re_dbg = all;

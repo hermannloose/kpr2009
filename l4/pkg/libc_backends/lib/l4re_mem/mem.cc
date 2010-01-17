@@ -33,7 +33,7 @@ mle list_head = {&list_head, 0, 0};
 void *malloc(unsigned size) throw()
 {
 	//enter_kdebug("malloc");
-	//printf("=== malloc: %i bytes requested. ===\n", size);
+	printf("=== malloc: %i bytes requested. ===\n", size);
 	mle *next = &list_head;
 	mle *prev = next;
 	do
@@ -100,6 +100,7 @@ void *malloc(unsigned size) throw()
 	ret->flags = 0;
 	//printf("Returning %08p [%08p -> %08p]\n next %08p\n size %i bytes\n flag %08x\n", ret, (ret->next + 1), ((char*) (ret + 1) + ret->size - 1), ret->next, ret->size, ret->flags);
 	//printf("Returning [%08x - %08x].\n", (ret + 1), (((char*) ret->next) - 1));
+	printf("=== malloc: returning %08p. ===\n", (void*) (ret + 1));
 	return (void*) (ret + 1);
 	/*
 	void *data = 0;

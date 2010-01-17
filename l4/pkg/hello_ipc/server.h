@@ -7,8 +7,6 @@
 #include <l4/re/util/object_registry>
 
 class Hello_server : public L4::Server_object{
-	private:
-		static L4Re::Util::Object_registry *registry;
 	public:
 		Hello_server();
 		int dispatch(l4_umword_t obj, L4::Ipc_iostream &ios);

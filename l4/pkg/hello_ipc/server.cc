@@ -12,9 +12,11 @@
 
 int calls = 0;
 
+static L4Re::Util::Object_registry registry(L4Re::Env::env()->main_thread(), L4Re::Env::env()->factory());
+
 Hello_server::Hello_server()
 {
-	registry = new L4Re::Util::Object_registry(L4Re::Env::env()->main_thread(), L4Re::Env::env()->factory()); 
+  //registry.register_obj(this);
 }
 
 int Hello_server::dispatch(l4_umword_t obj, L4::Ipc_iostream &ios){
@@ -31,7 +33,7 @@ int Hello_server::dispatch(l4_umword_t obj, L4::Ipc_iostream &ios){
 			{
 			// Allocate client cap
 			Worker *worker = new Worker();
-			registry->register_obj(worker);
+			registry.register_obj(worker);
 			// Put client cap back into ios
 			ios << worker->obj_cap();
 			}
