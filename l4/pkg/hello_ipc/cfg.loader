@@ -3,5 +3,5 @@
   srv = server->open();
 
 rom/hello_client foo "Barbarbarbar!"
-  ns = ns/client;
+  ns = ns/client, rw;
   log = logger->open("client", blue);

@@ -11,4 +11,4 @@ rom/hello_server
   log = logger->open("server", red);
 
 rom/loader cfg.loader
-  ns = ns/loader;
+  ns = ns/loader, rw;
