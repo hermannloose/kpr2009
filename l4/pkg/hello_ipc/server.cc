@@ -86,7 +86,6 @@ int Worker::dispatch(l4_umword_t obj, L4::Ipc_iostream &ios)
 int main(){
 	printf("Starting ...\n");
 	L4::Server<L4::Basic_registry_dispatcher> server(l4_utcb());
-	L4Re::Util::Object_registry registry(L4Re::Env::env()->main_thread(), L4Re::Env::env()->factory());
 	Hello_server *hello = new Hello_server;
 	printf("Created new Hello_server.\n");
 	registry.register_obj(hello);
