@@ -11,6 +11,6 @@ rom/hello_server
   log = logger->open("server", red);
   l4re_dbg = all;
 
-rom/loader cfg.loader
+rom/loader rom/cfg.loader
   ns = ns/loader, rw;
   l4re_dbg = all;
