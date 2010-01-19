@@ -1,5 +1,5 @@
-build/
-doc/
-kernel/
+build
+doc
+kernel
 Makefile
-tools/
+tools
