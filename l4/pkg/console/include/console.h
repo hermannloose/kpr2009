@@ -3,18 +3,42 @@
 
 #include <l4/cxx/iostream.h>
 #include <l4/cxx/ipc_server>
+#include <l4/libgfxbitmap/font.h>
 #include <l4/re/fb>
+#include <l4/re/protocols>
 #include <l4/re/util/cap_alloc>
 #include <l4/sys/types.h>
 
 #include <list>
 #include <string>
 
+namespace Protocol
+{
+  enum Protocols
+  {
+    Console
+  };
+};
+
+namespace Opcode
+{
+  enum Opcodes
+  {
+    Put, Scroll
+  };
+};
+
 class Console_server : public L4::Server_object
 {
   private:
     L4::Cap<L4Re::Framebuffer> fb;
     L4Re::Framebuffer::Info info;
+    gfxbitmap_font_t font;
+    int font_height;
+    int font_width;
+    int lines;
+    int chars;
+    int window_start;
     l4_addr_t base_addr;
     std::list<std::string> *history;
     void render();
