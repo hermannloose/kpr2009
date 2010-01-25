@@ -9,8 +9,11 @@
 #include <l4/re/util/object_registry>
 
 #include <stdio.h>
+#include <iostream>
+#include <sstream>
+#include <string>
 
-int calls = 0;
+int client_no = 0;
 
 static L4Re::Util::Object_registry registry(L4Re::Env::env()->main_thread(), L4Re::Env::env()->factory());
 
@@ -32,7 +35,9 @@ int Hello_server::dispatch(l4_umword_t obj, L4::Ipc_iostream &ios){
 		case L4Re::Service_::Open:
 			{
 			// Allocate client cap
-			Worker *worker = new Worker();
+			std::stringstream s;
+			s << "client" << ++client_no;
+			Worker *worker = new Worker(s.str());
 			registry.register_obj(worker);
 			// Put client cap back into ios
 			ios << worker->obj_cap();
@@ -44,9 +49,14 @@ int Hello_server::dispatch(l4_umword_t obj, L4::Ipc_iostream &ios){
 	return 0;
 }
 
+Worker::Worker(std::string name)
+{
+  this->name = name;
+}
+
 int Worker::dispatch(l4_umword_t obj, L4::Ipc_iostream &ios)
 {
-	printf("Worker is dispatching ...\n");
+	//printf("Worker is dispatching ...\n");
 	l4_msgtag_t tag;
 	ios >> tag;
 	if (tag.label() != Protocol::Hello){
@@ -75,7 +85,7 @@ int Worker::dispatch(l4_umword_t obj, L4::Ipc_iostream &ios)
 			return L4_EOK;
 		case Opcode::Echo:
 			ios >> msg_buf;
-			printf("#%05i (%s) %s\n", calls++, name, msg);
+			std::cout << "[" << this->name << "] " << msg << std::endl;
 			return L4_EOK;
 		default:
 			return -L4_ENOSYS;

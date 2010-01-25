@@ -1,8 +1,17 @@
-[namespace:client]
+[namespace:client1]
   rom = rom;
   srv = server->open();
 
-rom/hello_client foo "Barbarbarbar!"
-  ns = ns/client, rw;
-  log = logger->open("client", blue);
-  l4re_dbg = all;
+[namespace:client2]
+  rom = rom;
+	srv = server->open();
+
+rom/hello_client foo "Foo!"
+  ns = ns/client1, rw;
+  log = logger->open("client1", blue);
+	l4re_dbg = all;
+
+rom/hello_client bar "Bar!"
+  ns = ns/client2, rw;
+	log = logger->open("client2", blue);
+	l4re_dbg = all;
