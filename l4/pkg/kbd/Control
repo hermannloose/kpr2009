@@ -1,0 +1,3 @@
+requires: l4re libc_be_mem 
+provides: kbd 
+maintainer: hermannloose@gmail.com

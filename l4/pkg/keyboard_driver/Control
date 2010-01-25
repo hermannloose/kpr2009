@@ -1,3 +1,0 @@
-requires: l4re libc_be_mem 
-provides: keyboard_driver 
-maintainer: your@email.example.com
