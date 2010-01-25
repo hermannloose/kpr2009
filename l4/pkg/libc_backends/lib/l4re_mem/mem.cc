@@ -20,11 +20,14 @@ const unsigned EXTENSION_SIZE = 32768; // 32k
 
 const unsigned char EMPTY = 1;
 
+const unsigned PAD_SIZE = sizeof(l4_umword_t) - ((sizeof(unsigned) + sizeof(unsigned char)) % sizeof(l4_umword_t));
+
 typedef struct mem_list_entry
 {
 	mem_list_entry *next;
 	unsigned size;
 	unsigned char flags;
+	char pad[PAD_SIZE];
 } mle;
 
 mle list_head = {&list_head, 0, 0};
@@ -32,9 +35,12 @@ mle list_head = {&list_head, 0, 0};
 void *malloc(unsigned size) throw()
 {
 	//enter_kdebug("malloc");
-	printf("=== malloc: %i bytes requested. ===\n", size);
+	printf("=== malloc: %i bytes requested. ", size);
+	size += sizeof(l4_umword_t) - (size % sizeof(l4_umword_t));
+	printf("Padding to %i bytes. ===\n", size);
 	mle *next = &list_head;
 	mle *prev = next;
+	
 	do
 	{
 		if ((next->flags & EMPTY) && (next->size >= size))
@@ -63,6 +69,7 @@ void *malloc(unsigned size) throw()
 		}
 	}
 	while (next != &list_head);
+	
 	// no suitable chunk found
 	L4::Cap<L4Re::Dataspace> ds = L4Re::Util::cap_alloc.alloc<L4Re::Dataspace>();
 	if (!ds.is_valid()) return 0;
