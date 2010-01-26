@@ -1,0 +1,15 @@
+# vim:set ft=l4reconf:
+
+[config]
+  dbg=ns;
+
+[namespace:serverns]
+  rom = rom;
+  vesa = vesa;
+  PongServer;
+
+rom/pong-server
+  ns = ns/serverns,rw;
+
+rom/pong-client
+  ns = ns/serverns,ro;

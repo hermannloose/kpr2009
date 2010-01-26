@@ -1,0 +1,15 @@
+[namespace:server]
+  calc_server;
+  rom=rom;
+
+[namespace:client]
+  calc_server = ns/server/calc_server;
+  rom=rom;
+
+rom/ex_clntsrv-server
+  ns=ns/server,rw;
+  log=logger->open("server", R);
+
+rom/ex_clntsrv-client
+  ns=ns/client;
+  log=logger->open("client", B);
