@@ -48,3 +48,13 @@ title Console
   module /bin/x86_586/l4f/console
   module /conf/console.cfg
   vbeset 0x117
+
+title Keyboard Test
+  kernel /bin/x86_586/bootstrap
+  modaddr 0x2000000
+  module /bin/fiasco -serial_esc -jdb_cmd=JS
+  module /bin/x86_586/l4f/sigma0
+  module /bin/x86_586/l4f/moe rom/kbd.cfg
+  module /bin/x86_586/l4f/l4re
+	module /bin/x86_586/l4f/kbd
+	module /conf/kbd.cfg
