@@ -28,6 +28,11 @@ namespace Opcode
   };
 };
 
+enum Scrolling
+{
+	LINE_UP, LINE_DOWN, PAGE_UP, PAGE_DOWN, TOP, BOTTOM
+};
+
 class Console_server : public L4::Server_object
 {
   private:

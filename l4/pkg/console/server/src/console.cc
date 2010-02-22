@@ -5,6 +5,7 @@
 #include <l4/re/fb>
 #include <l4/re/env>
 #include <l4/re/protocols>
+#include <l4/re/service-sys.h>
 #include <l4/re/util/cap_alloc>
 #include <l4/re/util/object_registry>
 #include <l4/sys/types.h>
@@ -63,6 +64,18 @@ int Console_server::dispatch(l4_umword_t obj, L4::Ipc_iostream &ios)
 {
   l4_msgtag_t tag;
   ios >> tag;
+	
+	if (tag.label() == L4Re::Protocol::Service) {
+		L4::Opcode opcode;
+		ios >> opcode;
+		if (opcode == L4Re::Service_::Open) {
+			ios << this;
+			return L4_EOK;
+		} else {
+			return -L4_ENOSYS;
+		}
+	}
+
   if(tag.label() != Protocol::Console){
     return -L4_EBADPROTO;
   }
@@ -70,7 +83,13 @@ int Console_server::dispatch(l4_umword_t obj, L4::Ipc_iostream &ios)
   ios >> opcode;
   switch(opcode){
     case Opcode::Put:
-      // TODO Get the line to put from ios and insert it into history.
+			std::cerr << "Received input!" << std::endl;
+			char *msg;
+			unsigned long int msg_size;
+			ios >> L4::Ipc_buf_in<char>(msg, msg_size);
+      std::cout << "Received: [" << msg << "]" << std::endl;
+			history->push_back(msg);
+			render();
       return L4_EOK;
     case Opcode::Scroll:
       // TODO Get the value for scrolling from ios and scroll.
@@ -88,8 +107,6 @@ void Console_server::render()
   int line = 0;
   std::cout << "=== Rendering ===" << std::endl;
   std::list<std::string>::iterator iter;
-  // scroll in history
-  for(int i = 0; i < window_start; iter++);
   for(iter = history->begin(); iter != history->end(); iter++){
     std::cout << *iter << std::endl;
     gfxbitmap_font_text(
