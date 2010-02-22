@@ -62,10 +62,13 @@ Console_server::Console_server()
 
 int Console_server::dispatch(l4_umword_t obj, L4::Ipc_iostream &ios)
 {
+	printf("Console %p: dispatching.\n", this);
   l4_msgtag_t tag;
   ios >> tag;
-	
+	printf("Console %p: tag label [%i].\n", this, tag.label());
+
 	if (tag.label() == L4Re::Protocol::Service) {
+		printf("Console %p: opening service (dummy).\n", this);
 		L4::Opcode opcode;
 		ios >> opcode;
 		if (opcode == L4Re::Service_::Open) {
@@ -77,13 +80,15 @@ int Console_server::dispatch(l4_umword_t obj, L4::Ipc_iostream &ios)
 	}
 
   if(tag.label() != Protocol::Console){
-    return -L4_EBADPROTO;
+		return -L4_EBADPROTO;
   }
+
   L4::Opcode opcode;
   ios >> opcode;
+	printf("Console %p: opcode [%i].\n", this, opcode);
   switch(opcode){
     case Opcode::Put:
-			std::cerr << "Received input!" << std::endl;
+			printf("Console %p: receiving input.\n", this);
 			char *msg;
 			unsigned long int msg_size;
 			ios >> L4::Ipc_buf_in<char>(msg, msg_size);

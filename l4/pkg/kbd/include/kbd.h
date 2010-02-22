@@ -32,6 +32,7 @@ class EventQueue : public L4::Server_object
 {
 	private:
 		std::list<int> *scancodes;
+		L4::Cap<L4::Irq> fresh;
 	public:
 		EventQueue();
 		void push(int scancode);

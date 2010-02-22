@@ -37,7 +37,9 @@ l4_umword_t mutex = 0;
 
 void lock(l4_umword_t *mutex)
 {
+	printf("Locking mutex ...\n");
 	while(!l4util_cmpxchg(mutex, 0, 1));
+	printf("Done!\n");
 }
 
 void unlock(l4_umword_t *mutex)
