@@ -14,40 +14,43 @@ L4::Cap<void> kbd;
 
 int main(int argc, char* argv[])
 {
-  std::cout << "Starting console client ..." << std::endl;
+  printf("Starting client.\n");
 	
 	L4::Ipc_iostream console_str(l4_utcb());
 	L4::Ipc_iostream kbd_str(l4_utcb());
 
 	console = L4Re::Util::cap_alloc.alloc<void>();
 	if (!console.is_valid()) {
-		std::cerr << "Could not get valid capability slot!" << std::endl;
+		printf("Could not get valid capability slot!\n");
 		return 1;
 	}
 
 	if (L4Re::Env::env()->names()->query("console", console)) {
-		std::cerr << "Could not get 'console' capability!" << std::endl;
+		printf("Could not get 'console' capability!\n");
 		return 1;
 	}
+	printf("Got console cap.\n");
 
 	console_str << l4_umword_t(Opcode::Put) << "Client connected.";
 	l4_msgtag_t result = console_str.call(console.cap(), Protocol::Console);
 	if (l4_ipc_error(result, l4_utcb())) {
-		std::cerr << "Could not call console with initial message!" << std::endl;
+		printf("Could not call console with initial message!\n");
 	}
+	printf("Printed hello.\n");
 
 	L4::Cap<void> kbd = L4Re::Util::cap_alloc.alloc<void>();
 	if (!kbd.is_valid()) {
-		std::cerr << "Could not get valid capability slot!" << std::endl;
+		printf("Could not get valid capability slot!\n");
 		return 1;
 	}
 
 	if (L4Re::Env::env()->names()->query("kbd", kbd)) {
-		std::cerr << "Could not get 'kbd' capability!" << std::endl;
+		printf("Could not get 'kbd' capability!\n");
 		return 1;
 	}
+	printf("Got kbd cap.\n");
 
-  std::cout << "Console client started." << std::endl;
+  printf("Console client started.\n");
 
 	int scancode;
 
@@ -55,13 +58,13 @@ int main(int argc, char* argv[])
 		kbd_str.reset();
 		kbd_str << l4_umword_t(0);
 		//enter_kdebug("Calling kbd for scancode.");
-		std::cout << "Calling kbd for scancode." << std::endl;
+		printf("Calling kbd for scancode.\n");
 		result = kbd_str.call(kbd.cap(), 0);
 		if (l4_ipc_error(result, l4_utcb())) {
-			std::cerr << "Error reading scancode from kbd!" << std::endl;
+			printf("Error reading scancode from kbd!\n");
 		}
 		kbd_str >> scancode;
-		std::cout << "Received [" << scancode << "]." << std::endl;
+		printf("Received [%i].\n", scancode);
 		/*char msg[2];
 		msg[0] = scancode;
 		msg[1] = '\0';
@@ -70,9 +73,9 @@ int main(int argc, char* argv[])
 		console_str << l4_umword_t(Opcode::Put) << "Foo.";
 		result = console_str.call(console.cap(), Protocol::Console);
 		if (l4_ipc_error(result, l4_utcb())) {
-			std::cerr << "Error writing scancode to console!" << std::endl;
+			printf("Error writing scancode to console!\n");
 		}
-		std::cout << "Called console." << std::endl;
+		printf("Called console.\n");
 
 	}
 	

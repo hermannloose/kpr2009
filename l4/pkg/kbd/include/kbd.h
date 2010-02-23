@@ -31,6 +31,7 @@ class Kbd_server : public L4::Server_object
 class EventQueue : public L4::Server_object
 {
 	private:
+		l4_umword_t mutex;
 		std::list<int> *scancodes;
 		L4::Cap<L4::Irq> fresh;
 	public:
