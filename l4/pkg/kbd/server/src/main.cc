@@ -13,7 +13,8 @@
 #include <l4/sys/capability>
 #include <l4/sys/irq>
 #include <l4/sys/kdebug.h>
-#include <l4/util/atomic.h>
+#include <l4/sys/semaphore>
+#include <l4/sys/__timeout.h>
 #include <l4/util/port_io.h>
 #include <pthread.h>
 #include <pthread-l4.h>
@@ -30,20 +31,7 @@ static L4::Server<L4::Basic_registry_dispatcher> server(l4_utcb());
 
 static Kbd_server *driver;
 
-namespace KBD
-{
-	void lock(l4_umword_t *mutex)
-	{
-		while(!l4util_cmpxchg(mutex, 0, 1));
-	}
-
-	void unlock(l4_umword_t *mutex)
-	{
-		*mutex = 0;
-	}
-};
-
-l4_umword_t mutex = 0;
+static L4::Semaphore *sem;
 
 /*
 Process any keyboard interrupts, notifying the Kbd_server with the
@@ -79,7 +67,7 @@ Kbd_server::Kbd_server()
 
 void Kbd_server::push(int scancode)
 {
-	printf("Pushing scancode %i to event queues.\n", scancode);
+	printf("Kbd_server: push(): %i\n", scancode);
 	std::list<EventQueue>::iterator iter;
 	for (iter = queues->begin(); iter != queues->end(); iter++) {
 		iter->push(scancode);
@@ -94,6 +82,7 @@ int Kbd_server::dispatch(l4_umword_t obj, L4::Ipc_iostream &ios)
 	l4_msgtag_t tag;
 	ios >> tag;
 	if (tag.label() != L4Re::Protocol::Service) {
+		printf("Kbd_server: unsupported protocol!\n");
 		return -L4_EBADPROTO;
 	}
 	L4::Opcode opcode;
@@ -104,9 +93,9 @@ int Kbd_server::dispatch(l4_umword_t obj, L4::Ipc_iostream &ios)
 			{
 				EventQueue *evq = new EventQueue();
 				printf("Kbd_server: created EventQueue.\n");
-				KBD::lock(&mutex);
+				sem->down();
 				queues->push_back(*evq);
-				KBD::unlock(&mutex);
+				sem->up();
 				registry.register_obj(evq);
 				ios << evq->obj_cap();
 				printf("Kbd_server: handing out EventQueue %p.\n", evq);
@@ -120,96 +109,119 @@ int Kbd_server::dispatch(l4_umword_t obj, L4::Ipc_iostream &ios)
 
 EventQueue::EventQueue()
 {
-	mutex = 0;
+	l4_msgtag_t err;
+
 	scancodes = new std::list<int>();
 
+	// Create semaphore.
+	L4::Cap<L4::K_semaphore> ksem;
+	if (l4_error(err = L4Re::Env::env()->factory()->create_semaphore(ksem))) {
+		printf("EventQueue: could not create kernel semaphore! [%i]\n", err);
+	}
+	empty = new L4::Semaphore(ksem);
+	empty->init(0);
+	printf("EventQueue: created semaphore.\n");
+/*
 	// Create a new Thread for use with this EventQueue.
 	L4::Cap<L4::Thread> thread = L4Re::Util::cap_alloc.alloc<L4::Thread>();
 	if (!thread.is_valid()) {
-		printf("EventQueue: could not get a valid Thread capability!\n");
-	}
-	if (l4_error(L4Re::Env::env()->factory()->create_thread(L4Re::Env::env()->main_thread()))) {
-		printf("EventQueue: could not create Thread!\n");
+		printf("EventQueue: could not get a valid thread cap!\n");
 	}
 	printf("EventQueue: got thread cap.\n");
+	if (l4_error(err = L4Re::Env::env()->factory()->create_thread(thread))) {
+		printf("EventQueue: could not create thread! [%i]\n", err);
+	}
+	printf("EventQueue: created thread.\n");
 
 	// FIXME: I don't understand this ...
-	if (l4_error(L4Re::Env::env()->factory()->create_gate(
-		L4Re::Env::env()->main_thread(),
+	if (l4_error(err = L4Re::Env::env()->factory()->create_gate(
+		thread,
 		thread,
 		0xD00F
 	))) {
-		printf("Could not create IPC gate!\n");
+		printf("EventQueue: could not create IPC gate! [%i]\n", err);
 	}
-
+	printf("EventQueue: created IPC gate.\n");
+*/
+	/*
 	// Create an IRQ for this EventQueue to wait on if no events are pending.
 	fresh = L4Re::Util::cap_alloc.alloc<L4::Irq>();
 
 	if (!fresh.is_valid()) {
-		printf("Could not get a valid IRQ capability for the EventQueue!\n");
+		printf("EventQueue: could not get a valid IRQ cap!\n");
 		exit(1);
 	}
+	printf("EventQueue: got IRQ cap.\n");
 
-	if (l4_error(L4Re::Env::env()->factory()->create_irq(fresh))) {
-		printf("Could not create IRQ for the EventQueue!\n");
+	if (l4_error(err = L4Re::Env::env()->factory()->create_irq(fresh))) {
+		printf("EventQueue: could not create IRQ! [%i]\n", err);
 		exit(1);
 	}
+	printf("EventQueue: created IRQ.\n");
 
-	printf("Attaching to IRQ.\n");
-	if (l4_error(fresh->attach(0xBEEF, 0, thread))) {
-		printf("Could not attach to IRQ in EventQueue!\n");
+	printf("EventQueue: attaching to IRQ ...\n");
+	if (l4_error(err = fresh->attach(0xBEEF, L4::Irq::F_none, thread))) {
+		printf("EventQueue: could not attach to IRQ! [%i]\n", err);
 		exit(1);
 	}
-
+	*/
 }
 
 void EventQueue::push(int scancode)
 {
-	printf("EventQueue @%p: Received scancode %i.\n", this, scancode);
-	KBD::lock(&mutex);
+	printf("EventQueue: received scancode %i.\n", scancode);
+	sem->down();
 	scancodes->push_back(scancode);
-	// Wake any previously blocked client.
-	KBD::unlock(&mutex);
-	printf("EventQueue @%p: Waking clients.\n", this);
-	fresh->trigger();
+	sem->up();
+	empty->up();
+	printf("UP on EMPTY\n");
 }
 
 int EventQueue::dispatch(l4_umword_t obj, L4::Ipc_iostream &ios)
 {
 	//enter_kdebug("EventQueue::dispatch");
-	printf("EventQueue %p: Dispatching.\n", this);
+	printf("EventQueue: dispatching.\n");
 	l4_msgtag_t tag;
 	ios >> tag;
 	if (tag.label() != 0) {
+		printf("EventQueue: unsupported protocol!\n");
 		return -L4_EBADPROTO;
 	}
-	if (scancodes->empty()) {
-		l4_umword_t label;
-		printf("EventQueue %p: No scancodes queued, blocking.\n", this);
-		//enter_kdebug("Sleep on empty EventQueue.");
-		fresh->wait(&label);
-		//enter_kdebug("Waking up on EventQueue refill.");
-		printf("EventQueue %p: Processing retriggered.\n", this);
-	}
-	KBD::lock(&mutex);
+	printf("EventQueue: checking for scancodes ...\n");
+	empty->down();
+	printf("DOWN on EMPTY\n");
+	sem->down();
+	printf("DOWN on SEM\n");
 	int scancode = scancodes->front();
-	printf("Got first scancode in queue: %i\n", scancode);
+	printf("EventQueue: got first scancode in queue: %i\n", scancode);
 	scancodes->pop_front();
-	KBD::unlock(&mutex);
+	printf("UP on SEM\n");
+	sem->up();
 	ios << scancode;
 	return L4_EOK;
 }
 
 int main(int argc, char **argv)
 {
+	l4_msgtag_t err;
+
 	printf("Starting keyboard driver.\n");
+
+	L4::Cap<L4::K_semaphore> ksem;
+	if (l4_error(L4Re::Env::env()->factory()->create_semaphore(ksem))) {
+		printf("Could not create kernel semaphore!\n");
+		exit(1);
+	}
+	sem = new L4::Semaphore(ksem);
+	sem->init(1);
+	printf("Initialized semaphore.\n");
 
 	pthread_t poller;
 
 	/* Get an IRQ capability for the polling thread. */
 	irqcap = L4Re::Util::cap_alloc.alloc<L4::Irq>();
 	if (!irqcap.is_valid()) {
-		printf("Could not get a valid IRQ capability slot!\n");
+		printf("Could not get a valid IRQ cap!\n");
 		exit(1);
 	}
 	printf("Got IRQ cap.\n");
@@ -223,13 +235,13 @@ int main(int argc, char **argv)
 	
 	/* Create the polling thread. */
 	if (int err = pthread_create(&poller, NULL, &poll, NULL)) {
-		printf("Failed to create polling thread! [%i]!\n", err);
+		printf("Could not create polling thread! [%i]!\n", err);
 	}
 	printf("Created polling thread.\n");
 	
 	/* Attach the polling thread to its IRQ object. */
-	if (l4_error(irqcap->attach(0xBEEF, 0, L4::Cap<L4::Thread>(pthread_getl4cap(poller))))) {
-		printf("Error while attaching polling thread to IRQ!\n");
+	if (l4_error(err = irqcap->attach(0xBEEF, 0, L4::Cap<L4::Thread>(pthread_getl4cap(poller))))) {
+		printf("Error while attaching polling thread to IRQ! [%i]\n", err);
 		exit(1);
 	}
 	printf("Attached polling thread to IRQ.\n");
@@ -237,21 +249,21 @@ int main(int argc, char **argv)
 	/* Get an ICU capability. */
 	icucap = L4Re::Util::cap_alloc.alloc<L4::Icu>();
 	if (!icucap.is_valid()) {
-		printf("Could not get a valid ICU capability slot!\n");
+		printf("Could not get a valid ICU cap!\n");
 		exit(1);
 	}
 	printf("Got ICU cap.\n");
 
 	/* Associate the hardware ICU with this capability. */
 	if (L4Re::Env::env()->names()->query("icu", icucap)) {
-		printf("Could not get an ICU capability!\n");
+		printf("Could not get hardware ICU!\n");
 		exit(1);
 	}
-	printf("Bound to hardware ICU.\n");
+	printf("Got hardware ICU.\n");
 
 	/* Bind IRQ 0x1 to ICU. */
-	if (l4_error(icucap->bind(0x1, irqcap))) {
-		printf("Error while binding IRQ 0x1 to ICU!\n");
+	if (l4_error(err = icucap->bind(0x1, irqcap))) {
+		printf("Could not bind IRQ 0x1 to ICU! [%i]\n", err);
 		exit(1);
 	}
 	printf("Bound to interrupt 0x1 in ICU.\n");

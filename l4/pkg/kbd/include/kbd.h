@@ -4,6 +4,7 @@
 #include <l4/cxx/ipc_server>
 #include <l4/cxx/iostream.h>
 #include <l4/sys/irq>
+#include <l4/sys/semaphore>
 #include <l4/sys/types.h>
 
 #include <pthread.h>
@@ -34,6 +35,7 @@ class EventQueue : public L4::Server_object
 		l4_umword_t mutex;
 		std::list<int> *scancodes;
 		L4::Cap<L4::Irq> fresh;
+		L4::Semaphore *empty;
 	public:
 		EventQueue();
 		void push(int scancode);
