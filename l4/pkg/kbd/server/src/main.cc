@@ -18,10 +18,12 @@
 #include <l4/util/port_io.h>
 #include <pthread.h>
 #include <pthread-l4.h>
+#include <semaphore.h>
 
 #include <iostream>
 #include <stdlib.h>
 
+// The object registry for use with the main Kbd_server.
 static L4Re::Util::Object_registry registry(
 	L4Re::Env::env()->main_thread(),
 	L4Re::Env::env()->factory()
@@ -31,7 +33,7 @@ static L4::Server<L4::Basic_registry_dispatcher> server(l4_utcb());
 
 static Kbd_server *driver;
 
-static L4::Semaphore *sem;
+//static L4::Semaphore *sem;
 
 /*
 Process any keyboard interrupts, notifying the Kbd_server with the
@@ -60,9 +62,18 @@ static void *poll(void*)
 	return NULL;
 }
 
+static void *queue_worker(void *args)
+{
+	L4::Server<L4::Basic_registry_dispatcher> worker(l4_utcb());
+	printf("Thread %x starting server loop ...\n", pthread_self());
+	worker.loop();
+	return NULL;
+}
+
 Kbd_server::Kbd_server()
 {
 	queues = new std::list<EventQueue>();
+	sem_init(&list_access, 0, 1);
 }
 
 void Kbd_server::push(int scancode)
@@ -76,6 +87,7 @@ void Kbd_server::push(int scancode)
 
 int Kbd_server::dispatch(l4_umword_t obj, L4::Ipc_iostream &ios)
 {
+	printf("Thread: %x\n", pthread_self());
 	//enter_kdebug("kdb->open()");
 	printf("Kbd_server: dispatching.\n");
 	
@@ -91,12 +103,26 @@ int Kbd_server::dispatch(l4_umword_t obj, L4::Ipc_iostream &ios)
 		case L4Re::Service_::Open:
 			printf("Kbd_server: creating service.\n");
 			{
+				// Create a new worker thread for dispatching in EventQueue.
+				pthread_t worker;
+				pthread_create(&worker, NULL, &queue_worker, NULL);
+				printf("Worker thread: %x\n", worker);
+
+				L4Re::Util::Object_registry *reg = new L4Re::Util::Object_registry(
+					L4::Cap<L4::Thread>(pthread_getl4cap(worker)),
+					L4Re::Env::env()->factory()
+				);
+
 				EventQueue *evq = new EventQueue();
 				printf("Kbd_server: created EventQueue.\n");
-				sem->down();
+				
+				sem_wait(&list_access);
 				queues->push_back(*evq);
-				sem->up();
-				registry.register_obj(evq);
+				sem_post(&list_access);
+			
+				reg->register_obj(evq);
+				printf("Kbd_server: registered EventQueue.\n");
+
 				ios << evq->obj_cap();
 				printf("Kbd_server: handing out EventQueue %p.\n", evq);
 			}
@@ -114,89 +140,53 @@ EventQueue::EventQueue()
 	scancodes = new std::list<int>();
 
 	// Create semaphore.
-	L4::Cap<L4::K_semaphore> ksem;
+	/*L4::Cap<L4::K_semaphore> ksem;
 	if (l4_error(err = L4Re::Env::env()->factory()->create_semaphore(ksem))) {
 		printf("EventQueue: could not create kernel semaphore! [%i]\n", err);
 	}
 	empty = new L4::Semaphore(ksem);
-	empty->init(0);
+	empty->init(0);*/
+	sem_init(&list_access, 0, 1);
+	sem_init(&empty, 0, 0);
 	printf("EventQueue: created semaphore.\n");
-/*
-	// Create a new Thread for use with this EventQueue.
-	L4::Cap<L4::Thread> thread = L4Re::Util::cap_alloc.alloc<L4::Thread>();
-	if (!thread.is_valid()) {
-		printf("EventQueue: could not get a valid thread cap!\n");
-	}
-	printf("EventQueue: got thread cap.\n");
-	if (l4_error(err = L4Re::Env::env()->factory()->create_thread(thread))) {
-		printf("EventQueue: could not create thread! [%i]\n", err);
-	}
-	printf("EventQueue: created thread.\n");
-
-	// FIXME: I don't understand this ...
-	if (l4_error(err = L4Re::Env::env()->factory()->create_gate(
-		thread,
-		thread,
-		0xD00F
-	))) {
-		printf("EventQueue: could not create IPC gate! [%i]\n", err);
-	}
-	printf("EventQueue: created IPC gate.\n");
-*/
-	/*
-	// Create an IRQ for this EventQueue to wait on if no events are pending.
-	fresh = L4Re::Util::cap_alloc.alloc<L4::Irq>();
-
-	if (!fresh.is_valid()) {
-		printf("EventQueue: could not get a valid IRQ cap!\n");
-		exit(1);
-	}
-	printf("EventQueue: got IRQ cap.\n");
-
-	if (l4_error(err = L4Re::Env::env()->factory()->create_irq(fresh))) {
-		printf("EventQueue: could not create IRQ! [%i]\n", err);
-		exit(1);
-	}
-	printf("EventQueue: created IRQ.\n");
-
-	printf("EventQueue: attaching to IRQ ...\n");
-	if (l4_error(err = fresh->attach(0xBEEF, L4::Irq::F_none, thread))) {
-		printf("EventQueue: could not attach to IRQ! [%i]\n", err);
-		exit(1);
-	}
-	*/
 }
 
 void EventQueue::push(int scancode)
 {
+	printf("Thread: %x\n", pthread_self());
 	printf("EventQueue: received scancode %i.\n", scancode);
-	sem->down();
+	sem_wait(&list_access);
+	printf("DOWN on list_access\n");
 	scancodes->push_back(scancode);
-	sem->up();
-	empty->up();
-	printf("UP on EMPTY\n");
+	sem_post(&list_access);
+	printf("UP on list_access\n");
+	enter_kdebug("EventQueue: pre-up on empty in push()");
+	sem_post(&empty);
+	enter_kdebug("EventQueue: up on empty in push()");
+	printf("UP on empty\n");
 }
 
 int EventQueue::dispatch(l4_umword_t obj, L4::Ipc_iostream &ios)
 {
+	printf("[%x] EventQueue: dispatching.\n", pthread_self());
 	//enter_kdebug("EventQueue::dispatch");
-	printf("EventQueue: dispatching.\n");
 	l4_msgtag_t tag;
 	ios >> tag;
 	if (tag.label() != 0) {
-		printf("EventQueue: unsupported protocol!\n");
+		printf("[%x] EventQueue: unsupported protocol!\n", pthread_self());
 		return -L4_EBADPROTO;
 	}
-	printf("EventQueue: checking for scancodes ...\n");
-	empty->down();
-	printf("DOWN on EMPTY\n");
-	sem->down();
-	printf("DOWN on SEM\n");
+	printf("[%x] EventQueue: checking for scancodes ...\n", pthread_self());
+	enter_kdebug("EventQueue: before testing 'empty'");
+	sem_wait(&empty);
+	printf("DOWN on empty\n");
+	sem_wait(&list_access);
+	printf("DOWN on list_access\n");
 	int scancode = scancodes->front();
 	printf("EventQueue: got first scancode in queue: %i\n", scancode);
 	scancodes->pop_front();
-	printf("UP on SEM\n");
-	sem->up();
+	sem_post(&list_access);
+	printf("UP on list_access\n");
 	ios << scancode;
 	return L4_EOK;
 }
@@ -207,14 +197,14 @@ int main(int argc, char **argv)
 
 	printf("Starting keyboard driver.\n");
 
-	L4::Cap<L4::K_semaphore> ksem;
+	/*L4::Cap<L4::K_semaphore> ksem;
 	if (l4_error(L4Re::Env::env()->factory()->create_semaphore(ksem))) {
 		printf("Could not create kernel semaphore!\n");
 		exit(1);
 	}
 	sem = new L4::Semaphore(ksem);
 	sem->init(1);
-	printf("Initialized semaphore.\n");
+	printf("Initialized semaphore.\n");*/
 
 	pthread_t poller;
 
@@ -240,7 +230,7 @@ int main(int argc, char **argv)
 	printf("Created polling thread.\n");
 	
 	/* Attach the polling thread to its IRQ object. */
-	if (l4_error(err = irqcap->attach(0xBEEF, 0, L4::Cap<L4::Thread>(pthread_getl4cap(poller))))) {
+	if (l4_error(err = irqcap->attach(0xbeef0001, 0, L4::Cap<L4::Thread>(pthread_getl4cap(poller))))) {
 		printf("Error while attaching polling thread to IRQ! [%i]\n", err);
 		exit(1);
 	}
@@ -269,13 +259,6 @@ int main(int argc, char **argv)
 	printf("Bound to interrupt 0x1 in ICU.\n");
 
 	driver = new Kbd_server();
-	
-
-	/*pthread_t poller;
-	printf("Creating polling thread ... ");
-	if (int err = pthread_create(&poller, NULL, &poll, NULL)) {
-		printf("Failed to create polling thread! [" << err << "]");
-	}*/
 
 	// Publish the service.
 	registry.register_obj(driver);

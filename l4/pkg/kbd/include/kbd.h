@@ -8,6 +8,7 @@
 #include <l4/sys/types.h>
 
 #include <pthread.h>
+#include <semaphore.h>
 
 #include <list>
 
@@ -23,6 +24,7 @@ class Kbd_server : public L4::Server_object
 {
 	private:
 		std::list<EventQueue> *queues;
+		sem_t list_access;
   public:
 	  Kbd_server();
 		void push(int scancode);
@@ -32,11 +34,12 @@ class Kbd_server : public L4::Server_object
 class EventQueue : public L4::Server_object
 {
 	private:
-		l4_umword_t mutex;
 		std::list<int> *scancodes;
-		L4::Cap<L4::Irq> fresh;
-		L4::Semaphore *empty;
+		//L4::Semaphore *empty;
+		sem_t list_access;
+		sem_t empty;
 	public:
+		static void *create(void *args);
 		EventQueue();
 		void push(int scancode);
 		int dispatch(l4_umword_t obj, L4::Ipc_iostream &ios);
