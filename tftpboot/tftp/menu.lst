@@ -63,3 +63,13 @@ title Keyboard-Test
   module /bin/x86_586/l4f/l4re
   module /bin/x86_586/l4f/kbd
   module /conf/kbd.cfg
+
+title SemTest
+	kernel /bin/x86_586/bootstrap
+	modaddr 0x2000000
+	module /bin/fiasco -serial_esc -jdb_cmd=JS
+	module /bin/x86_586/l4f/sigma0
+	module /bin/x86_586/l4f/moe rom/sem_test.cfg
+	module /bin/x86_586/l4f/l4re
+	module /bin/x86_586/l4f/sem_test
+	module /conf/sem_test.cfg
