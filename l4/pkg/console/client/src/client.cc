@@ -76,7 +76,6 @@ int main(int argc, char* argv[])
 			printf("Error writing scancode to console!\n");
 		}
 		printf("Called console.\n");
-
 	}
 	
 	return 0;

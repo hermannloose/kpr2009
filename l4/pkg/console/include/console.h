@@ -46,6 +46,7 @@ class Console_server : public L4::Server_object
     int window_start;
     l4_addr_t base_addr;
     std::list<std::string> *history;
+		void clear();
     void render();
   public:
     Console_server();

@@ -12,7 +12,7 @@
 
 #include <iostream>
 #include <list>
-#include <string>
+#include <string.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -56,8 +56,8 @@ Console_server::Console_server()
   history->push_back("Console started.");
   history->push_back("Hello World!");
   render();
-  // for testing
-  window_start = 1;
+	window_start = 1;
+	render();
 }
 
 int Console_server::dispatch(l4_umword_t obj, L4::Ipc_iostream &ios)
@@ -97,6 +97,41 @@ int Console_server::dispatch(l4_umword_t obj, L4::Ipc_iostream &ios)
 			render();
       return L4_EOK;
     case Opcode::Scroll:
+			int scroll;
+			ios >> scroll;
+			switch (scroll) {
+				case LINE_UP:
+					printf("Scrolling: line up.\n");
+					if (window_start > 0) window_start--;
+					break;
+				case LINE_DOWN:
+					printf("Scrolling: line down.\n");
+					if (window_start < (history->size() - 1)) window_start++;
+					break;
+				case PAGE_UP:
+					printf("Scrolling: page up.\n");
+					if (window_start >= lines) window_start -= lines;
+					break;
+				case PAGE_DOWN:
+					printf("Scrolling: page down.\n");
+					if (window_start < (history->size() - (2 * lines - 1))) {
+						window_start += lines;
+					} else {
+						window_start = history->size() - (lines + 1);
+					}
+					break;
+				case TOP:
+					printf("Scrolling: top.\n");
+					window_start = 0;
+					break;
+				case BOTTOM:
+					printf("Scrolling: bottom.\n");
+					window_start = history->size() - 1;
+					break;
+				default:
+					break;
+			}
+			render();
       // TODO Get the value for scrolling from ios and scroll.
       return L4_EOK;
     default:
@@ -105,14 +140,25 @@ int Console_server::dispatch(l4_umword_t obj, L4::Ipc_iostream &ios)
   return 0;
 }
 
+void Console_server::clear()
+{
+	printf("Clear %p to %p with %06x.\n", base_addr, base_addr + info.mem_total, 0x000000);
+	memset(&base_addr, 0x000000, info.mem_total);
+}
+
 void Console_server::render()
 {
+	//clear();
+	// Start with some padding around the text.
   int x = 1;
   int y = 1 + font_height;
   int line = 0;
   std::cout << "=== Rendering ===" << std::endl;
   std::list<std::string>::iterator iter;
   for(iter = history->begin(); iter != history->end(); iter++){
+		/*for (int i = 0; i < window_start; i++) {
+			iter++;
+		}*/
     std::cout << *iter << std::endl;
     gfxbitmap_font_text(
       &base_addr,
