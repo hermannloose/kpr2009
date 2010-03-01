@@ -15,6 +15,7 @@
 #include <l4/sys/capability>
 #include <l4/sys/kdebug.h>
 #include <l4/sys/l4int.h>
+#include <l4/util/atomic.h>
 
 const unsigned EXTENSION_SIZE = 32768; // 32k 
 
@@ -32,9 +33,22 @@ typedef struct mem_list_entry
 
 mle list_head = {&list_head, 0, 0};
 
+void lock(l4_umword_t *mutex)
+{
+	while(!l4util_cmpxchg(mutex, 0, 1));
+}
+
+void unlock(l4_umword_t *mutex)
+{
+	*mutex = 0;
+}
+
+l4_umword_t mutex = 0;
+
 void *malloc(unsigned size) throw()
 {
 	//enter_kdebug("malloc");
+	lock(&mutex);
 	printf("=== malloc: %i bytes requested. ", size);
 	size += sizeof(l4_umword_t) - (size % sizeof(l4_umword_t));
 	printf("Padding to %i bytes. ===\n", size);
@@ -60,6 +74,7 @@ void *malloc(unsigned size) throw()
 			}
 			// if not, just return the whole thing
 			void *ret_split = (void*) (next + 1);
+			unlock(&mutex);
 			return ret_split;
 		}
 		else
@@ -72,12 +87,21 @@ void *malloc(unsigned size) throw()
 	
 	// no suitable chunk found
 	L4::Cap<L4Re::Dataspace> ds = L4Re::Util::cap_alloc.alloc<L4Re::Dataspace>();
-	if (!ds.is_valid()) return 0;
+	if (!ds.is_valid()) {
+		unlock(&mutex);
+		return 0;
+	}
 	long err = L4Re::Env::env()->mem_alloc()->alloc(EXTENSION_SIZE, ds);
-	if (err) return 0;
+	if (err) {
+		unlock(&mutex);
+		return 0;
+	}
 	l4_addr_t addr = 0;
 	err = L4Re::Env::env()->rm()->attach(&addr, EXTENSION_SIZE, L4Re::Rm::Search_addr, ds, 0);
-	if (err) return 0;
+	if (err) {
+		unlock(&mutex);
+		return 0;
+	}
 	prev->next = (mle*) addr;
 	mle *new_next = &list_head;
 	if ((EXTENSION_SIZE - size) > sizeof(mle))
@@ -95,17 +119,20 @@ void *malloc(unsigned size) throw()
 	ret->flags = 0;
 	printf("=== malloc: returning %08p. ===\n", (void*) (ret + 1));
 	void *ret_new = (void*) (ret + 1);
+	unlock(&mutex);
 	return ret_new;
 }
 
 
 void free(void *p) throw()
 {
+	lock(&mutex);
 	printf("Free: %08p\n", p);
 	//enter_kdebug("Entering free.");
 	// FIXME free() does nothing, for the purpose of tracking down the "Operation not permitted" bug.
 	// just mark chunk as free, without any compaction yet
 	//mle *to_free = (mle*) p - 1;
 	//to_free->flags = to_free->flags | EMPTY;
+	unlock(&mutex);
 	//enter_kdebug("Exiting free.");
 }

@@ -28,6 +28,11 @@ namespace Opcode
   };
 };
 
+enum Scrolling
+{
+	LINE_UP, LINE_DOWN, PAGE_UP, PAGE_DOWN, TOP, BOTTOM
+};
+
 class Console_server : public L4::Server_object
 {
   private:
@@ -41,6 +46,7 @@ class Console_server : public L4::Server_object
     int window_start;
     l4_addr_t base_addr;
     std::list<std::string> *history;
+		void clear();
     void render();
   public:
     Console_server();

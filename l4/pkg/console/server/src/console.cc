@@ -5,13 +5,14 @@
 #include <l4/re/fb>
 #include <l4/re/env>
 #include <l4/re/protocols>
+#include <l4/re/service-sys.h>
 #include <l4/re/util/cap_alloc>
 #include <l4/re/util/object_registry>
 #include <l4/sys/types.h>
 
 #include <iostream>
 #include <list>
-#include <string>
+#include <string.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -55,24 +56,82 @@ Console_server::Console_server()
   history->push_back("Console started.");
   history->push_back("Hello World!");
   render();
-  // for testing
-  window_start = 1;
+	window_start = 1;
+	render();
 }
 
 int Console_server::dispatch(l4_umword_t obj, L4::Ipc_iostream &ios)
 {
+	printf("Console %p: dispatching.\n", this);
   l4_msgtag_t tag;
   ios >> tag;
+	printf("Console %p: tag label [%i].\n", this, tag.label());
+
+	if (tag.label() == L4Re::Protocol::Service) {
+		printf("Console %p: opening service (dummy).\n", this);
+		L4::Opcode opcode;
+		ios >> opcode;
+		if (opcode == L4Re::Service_::Open) {
+			ios << this;
+			return L4_EOK;
+		} else {
+			return -L4_ENOSYS;
+		}
+	}
+
   if(tag.label() != Protocol::Console){
-    return -L4_EBADPROTO;
+		return -L4_EBADPROTO;
   }
+
   L4::Opcode opcode;
   ios >> opcode;
+	printf("Console %p: opcode [%i].\n", this, opcode);
   switch(opcode){
     case Opcode::Put:
-      // TODO Get the line to put from ios and insert it into history.
+			printf("Console %p: receiving input.\n", this);
+			char *msg;
+			unsigned long int msg_size;
+			ios >> L4::Ipc_buf_in<char>(msg, msg_size);
+      std::cout << "Received: [" << msg << "]" << std::endl;
+			history->push_back(msg);
+			render();
       return L4_EOK;
     case Opcode::Scroll:
+			int scroll;
+			ios >> scroll;
+			switch (scroll) {
+				case LINE_UP:
+					printf("Scrolling: line up.\n");
+					if (window_start > 0) window_start--;
+					break;
+				case LINE_DOWN:
+					printf("Scrolling: line down.\n");
+					if (window_start < (history->size() - 1)) window_start++;
+					break;
+				case PAGE_UP:
+					printf("Scrolling: page up.\n");
+					if (window_start >= lines) window_start -= lines;
+					break;
+				case PAGE_DOWN:
+					printf("Scrolling: page down.\n");
+					if (window_start < (history->size() - (2 * lines - 1))) {
+						window_start += lines;
+					} else {
+						window_start = history->size() - (lines + 1);
+					}
+					break;
+				case TOP:
+					printf("Scrolling: top.\n");
+					window_start = 0;
+					break;
+				case BOTTOM:
+					printf("Scrolling: bottom.\n");
+					window_start = history->size() - 1;
+					break;
+				default:
+					break;
+			}
+			render();
       // TODO Get the value for scrolling from ios and scroll.
       return L4_EOK;
     default:
@@ -81,16 +140,25 @@ int Console_server::dispatch(l4_umword_t obj, L4::Ipc_iostream &ios)
   return 0;
 }
 
+void Console_server::clear()
+{
+	printf("Clear %p to %p with %06x.\n", base_addr, base_addr + info.mem_total, 0x000000);
+	memset(&base_addr, 0x000000, info.mem_total);
+}
+
 void Console_server::render()
 {
+	//clear();
+	// Start with some padding around the text.
   int x = 1;
   int y = 1 + font_height;
   int line = 0;
   std::cout << "=== Rendering ===" << std::endl;
   std::list<std::string>::iterator iter;
-  // scroll in history
-  for(int i = 0; i < window_start; iter++);
   for(iter = history->begin(); iter != history->end(); iter++){
+		/*for (int i = 0; i < window_start; i++) {
+			iter++;
+		}*/
     std::cout << *iter << std::endl;
     gfxbitmap_font_text(
       &base_addr,

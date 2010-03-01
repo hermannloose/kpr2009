@@ -45,16 +45,31 @@ title Console
   module /bin/x86_586/l4f/sigma0
   module /bin/x86_586/l4f/moe rom/console.cfg
   module /bin/x86_586/l4f/l4re
+	module /bin/x86_586/l4f/loader
   module /bin/x86_586/l4f/console
+	module /bin/x86_586/l4f/console_client
+  module /bin/x86_586/l4f/kbd
   module /conf/console.cfg
+	module /conf/console_client.cfg
+	module /conf/kbd.cfg
   vbeset 0x117
 
-title Keyboard Test
-  kernel /bin/x86_586/bootstrap
+title Keyboard-Test
+	kernel /bin/x86_586/bootstrap
   modaddr 0x2000000
   module /bin/fiasco -serial_esc -jdb_cmd=JS
   module /bin/x86_586/l4f/sigma0
   module /bin/x86_586/l4f/moe rom/kbd.cfg
   module /bin/x86_586/l4f/l4re
-	module /bin/x86_586/l4f/kbd
-	module /conf/kbd.cfg
+  module /bin/x86_586/l4f/kbd
+  module /conf/kbd.cfg
+
+title SemTest
+	kernel /bin/x86_586/bootstrap
+	modaddr 0x2000000
+	module /bin/fiasco -serial_esc -jdb_cmd=JS
+	module /bin/x86_586/l4f/sigma0
+	module /bin/x86_586/l4f/moe rom/sem_test.cfg
+	module /bin/x86_586/l4f/l4re
+	module /bin/x86_586/l4f/sem_test
+	module /conf/sem_test.cfg
