@@ -1,1 +1,5 @@
 If qemu.sh gets stuck on "Calibrating timer loop ...", try the kvm.sh start script!
+
+h1. Starting
+
+* Use qemu-iso.sh for faster booting.
