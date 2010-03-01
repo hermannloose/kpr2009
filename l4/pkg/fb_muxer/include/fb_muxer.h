@@ -4,6 +4,12 @@
 #include <l4/cxx/ipc_server>
 #include <l4/sys/types.h>
 
+
+enum
+{
+	Switch	
+};
+
 class FBMuxer : public L4::Server_object
 {
 	public:
