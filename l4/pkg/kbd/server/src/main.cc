@@ -29,6 +29,7 @@ static L4::Server<L4::Basic_registry_dispatcher> server(l4_utcb());
 
 static Kbd_server *driver;
 
+sem_t driver_started;
 
 /*
 Process any keyboard interrupts, notifying the Kbd_server with the
@@ -38,6 +39,8 @@ static void *poll(void*)
 {
 	l4_umword_t label;
 	int scancode = 0;
+
+	sem_wait(&driver_started);
 
 	printf("poll(): Starting to poll ...\n");
 
@@ -83,13 +86,12 @@ void Kbd_server::push(int scancode)
 
 int Kbd_server::dispatch(l4_umword_t obj, L4::Ipc_iostream &ios)
 {
-	printf("Thread: %x\n", pthread_self());
-	printf("Kbd_server: dispatching.\n");
+	printf("[%p] Kbd_server: dispatching.\n", pthread_self());
 	
 	l4_msgtag_t tag;
 	ios >> tag;
 	if (tag.label() != L4Re::Protocol::Service) {
-		printf("Kbd_server: unsupported protocol!\n");
+		printf("[%p] Kbd_server: unsupported protocol!\n", pthread_self());
 		
 		return -L4_EBADPROTO;
 	}
@@ -99,7 +101,7 @@ int Kbd_server::dispatch(l4_umword_t obj, L4::Ipc_iostream &ios)
 	
 	switch (opcode) {
 		case L4Re::Service_::Open:
-			printf("Kbd_server: creating service.\n");
+			printf("[%p] Kbd_server: creating service.\n", pthread_self());
 			{
 				// Create a new worker thread for dispatching in EventQueue.
 				pthread_t worker;
@@ -180,6 +182,8 @@ int main(int argc, char **argv)
 {
 	l4_msgtag_t err;
 
+	sem_init(&driver_started, 0, 0);
+
 	printf("Starting keyboard driver.\n");
 
 	pthread_t poller;
@@ -243,6 +247,8 @@ int main(int argc, char **argv)
 		return 1;
 	}
 	printf("Registered driver.\n");
+	
+	sem_post(&driver_started);
 
 	// Start dispatching.
 	printf("Keyboard driver started.\n");
