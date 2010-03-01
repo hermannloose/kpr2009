@@ -50,8 +50,14 @@ void *malloc(unsigned size) throw()
 	//enter_kdebug("malloc");
 	lock(&mutex);
 	printf("=== malloc: %i bytes requested. ", size);
-	size += sizeof(l4_umword_t) - (size % sizeof(l4_umword_t));
-	printf("Padding to %i bytes. ===\n", size);
+	
+	if (size % sizeof(l4_umword_t)) {
+		printf("===\n");
+	} else {
+		size += sizeof(l4_umword_t) - (size % sizeof(l4_umword_t));
+		printf("Padding to %i bytes. ===\n", size);
+	}
+
 	mle *next = &list_head;
 	mle *prev = next;
 	
