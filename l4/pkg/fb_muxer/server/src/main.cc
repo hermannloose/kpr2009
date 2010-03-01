@@ -1,5 +1,30 @@
 #include <l4/fb_muxer/fb_muxer.h>
 
+#include <l4/re/util/cap_alloc>
+#include <l4/re/protocols>
+#include <l4/re/service-sys.h>
+
+#include <stdio.h>
+#include <stdlib.h>
+
+FBMuxer::FBMuxer()
+{
+	l4_msgtag_t err;
+
+	fb = L4Re::Util::cap_alloc.alloc<L4Re::Framebuffer>();
+	if (!fb.is_valid()) {
+		printf("Could not get a valid capability slot!\n");
+		
+		exit(1);
+	}
+	if (l4_error(err = L4Re::Env::env()->names()->query("fb", fb))) {
+		printf("Could not get framebuffer capability!\n");
+
+		exit(1);
+	}
+
+}
+
 int FBMuxer::dispatch(l4_umword_t obj, L4::Ipc_iostream ios)
 {
 	l4_msgtag_t tag;
