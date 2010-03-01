@@ -4,13 +4,11 @@
 #include <l4/cxx/ipc_server>
 #include <l4/cxx/iostream.h>
 #include <l4/sys/irq>
-#include <l4/sys/semaphore>
 #include <l4/sys/types.h>
 
+#include <list>
 #include <pthread.h>
 #include <semaphore.h>
-
-#include <list>
 
 static L4::Cap<L4::Icu> icucap;
 static L4::Cap<L4::Irq> irqcap;
@@ -23,7 +21,7 @@ class EventQueue;
 class Kbd_server : public L4::Server_object
 {
 	private:
-		std::list<EventQueue> *queues;
+		std::list<EventQueue*> *queues;
 		sem_t list_access;
   public:
 	  Kbd_server();
@@ -35,7 +33,6 @@ class EventQueue : public L4::Server_object
 {
 	private:
 		std::list<int> *scancodes;
-		//L4::Semaphore *empty;
 		sem_t list_access;
 		sem_t empty;
 	public:
