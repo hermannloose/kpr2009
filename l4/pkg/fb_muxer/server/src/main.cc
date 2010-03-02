@@ -186,12 +186,13 @@ int main(int argc, char **argv)
 
 	L4::Server<L4::Basic_registry_dispatcher> server(l4_utcb());
 
-	if (L4Re::Env::env()->names()->register_obj("muxer", muxer->obj_cap())) {
+	if (L4Re::Env::env()->names()->register_obj("fb_muxer", muxer->obj_cap())) {
 		printf("Could not register muxer, probably read-only namespace?\n");
 		
 		return 1;
 	}
 
+	printf("Framebuffer multiplexer started.\n");
 	server.loop();
 
 	return 0;
