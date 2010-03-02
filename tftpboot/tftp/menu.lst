@@ -73,3 +73,17 @@ title SemTest
 	module /bin/x86_586/l4f/l4re
 	module /bin/x86_586/l4f/sem_test
 	module /conf/sem_test.cfg
+
+title Virtual framebuffer test
+	kernel /bin/x86_586/bootstrap
+	modaddr 0x2000000
+	module /bin/fiasco -serial_esc -jdb_cmd=JS
+	module /bin/x86_586/l4f/sigma0
+	module /bin/x86_586/l4f/moe rom/test_fb_muxer.cfg
+	module /bin/x86_586/l4f/l4re
+	module /bin/x86_586/l4f/loader
+	module /bin/x86_586/l4f/console
+	module /bin/x86_586/l4f/fb_muxer
+	module /conf/test_fb_muxer.cfg
+	module /conf/test_fb_muxer_loader.cfg
+  vbeset 0x117
