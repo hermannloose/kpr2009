@@ -6,18 +6,43 @@
 #include <l4/sys/kdebug.h>
 
 #include <iostream>
-
 #include <stdlib.h>
 
 L4::Cap<void> console;
 L4::Cap<void> kbd;
 
+L4::Ipc_iostream console_str(l4_utcb());
+L4::Ipc_iostream kbd_str(l4_utcb());
+
+void put(const char* to_put)
+{
+	l4_msgtag_t result;
+
+	console_str.reset();
+	console_str << l4_umword_t(Opcode::Put) << to_put;
+
+	result = console_str.call(console.cap(), 0);
+	if (l4_ipc_error(result, l4_utcb())) {
+		printf("Error while trying to put string!\n");
+	}
+}
+
+void scroll(int MODE)
+{
+	l4_msgtag_t result;
+
+	console_str.reset();
+	console_str << l4_umword_t(Opcode::Scroll) << MODE;
+
+	result = console_str.call(console.cap(), 0);
+	if (l4_ipc_error(result, l4_utcb())) {
+		printf("Error while trying to scroll!\n");
+	}
+}
+
 int main(int argc, char* argv[])
 {
-  printf("Starting client.\n");
-	
-	L4::Ipc_iostream console_str(l4_utcb());
-	L4::Ipc_iostream kbd_str(l4_utcb());
+  printf("Starting client.\n");	
 
 	console = L4Re::Util::cap_alloc.alloc<void>();
 	if (!console.is_valid()) {
@@ -55,27 +80,24 @@ int main(int argc, char* argv[])
 	int scancode;
 
 	while (1) {
+		
 		kbd_str.reset();
 		kbd_str << l4_umword_t(0);
-		//enter_kdebug("Calling kbd for scancode.");
-		printf("Calling kbd for scancode.\n");
+		
 		result = kbd_str.call(kbd.cap(), 0);
 		if (l4_ipc_error(result, l4_utcb())) {
 			printf("Error reading scancode from kbd!\n");
 		}
+		
 		kbd_str >> scancode;
 		printf("Received [%i].\n", scancode);
-		/*char msg[2];
-		msg[0] = scancode;
-		msg[1] = '\0';
-		s << Opcode::Put << msg;*/
-		console_str.reset();
-		console_str << l4_umword_t(Opcode::Put) << "Foo.";
-		result = console_str.call(console.cap(), Protocol::Console);
-		if (l4_ipc_error(result, l4_utcb())) {
-			printf("Error writing scancode to console!\n");
+		
+		switch (scancode) {
+			case 224: // PageDown pressed
+				scroll(PAGE_DOWN);
+			default:
+				put("Foo.");
 		}
-		printf("Called console.\n");
 	}
 	
 	return 0;
