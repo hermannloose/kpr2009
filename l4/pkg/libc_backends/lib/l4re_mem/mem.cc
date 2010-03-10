@@ -17,6 +17,10 @@
 #include <l4/sys/l4int.h>
 #include <l4/util/atomic.h>
 
+#include <assert.h>
+
+#define debug 0
+
 const unsigned EXTENSION_SIZE = 32768; // 32k 
 
 const unsigned char EMPTY = 1;
@@ -33,79 +37,166 @@ typedef struct mem_list_entry
 
 mle list_head = {&list_head, 0, 0};
 
+// FIXME: Semaphores would be nicer, but is this possible here?
+
 void lock(l4_umword_t *mutex)
 {
+	#if debug
+	printf("Locking mutex.\n");
+	#endif
+
 	while(!l4util_cmpxchg(mutex, 0, 1));
+	
+	#if debug
+	printf("Locked mutex.\n");
+	#endif
 }
 
 void unlock(l4_umword_t *mutex)
 {
 	*mutex = 0;
+
+	#if debug
+	printf("Unlocked mutex.\n");
+	#endif
 }
 
 l4_umword_t mutex = 0;
 
+mle * split_chunk(mle *chunk, unsigned size)
+{
+	#if debug
+	printf("Chunk to split: %p size %i flags %x next %p\n", chunk, chunk->size, chunk->flags, chunk->next, size);
+	#endif
+
+	// PRE
+	assert(chunk != NULL);
+	assert(chunk->next != NULL);
+	assert(size > 0);
+	assert(size < (chunk->size - sizeof(mle)));
+
+	unsigned unsplit_size = chunk->size;
+
+	char *aux = (char*) (chunk + 1);
+	aux += size;
+
+	mle *ins = (mle*) aux;
+	ins->next = chunk->next;
+	ins->size = chunk->size - (size + sizeof(mle));
+	ins->flags = EMPTY;
+
+	#if debug
+	printf("New chunk: %p size %i flags %x next %p\n", ins, ins->size, ins->flags, ins->next);
+	#endif
+
+	chunk->next = ins;
+	chunk->size = size;
+
+	assert(((char*) ins - (char*) (chunk + 1)) == size);
+
+	// POST
+	assert(chunk != NULL);
+	assert(ins != NULL);
+	assert(chunk->next == ins);
+	assert(ins->next != NULL);
+
+	return ins;
+}
+
 void *malloc(unsigned size) throw()
 {
-	//enter_kdebug("malloc");
+	#if debug
+	printf("\nlist-head: %p size: %i\n", &list_head, size);
+	enter_kdebug("malloc");
+	#endif
+
 	lock(&mutex);
-	printf("=== malloc: %i bytes requested. ", size);
 	
+	#if debug
+	printf("=== malloc: %i bytes requested. ", size);
+	#endif
+
 	if (size % sizeof(l4_umword_t)) {
-		printf("===\n");
-	} else {
 		size += sizeof(l4_umword_t) - (size % sizeof(l4_umword_t));
+		
+		#if debug
 		printf("Padding to %i bytes. ===\n", size);
+		#endif		
+	} else {
+		#if debug
+		printf("===\n");
+		#endif
 	}
+
+	// Assert that memory is requested out word-aligned.
+	assert(!(size % sizeof(l4_umword_t)));
 
 	mle *next = &list_head;
 	mle *prev = next;
-	
-	do
-	{
-		if ((next->flags & EMPTY) && (next->size >= size))
-		{
+
+	do {
+		assert(next != NULL);
+
+		if ((next->flags & EMPTY) && (next->size >= size)) {
+			// Assert that the chunk is really large enough.
+			assert(next < next->next ? (next - next->next) > size : 1);
+
 			next->flags = next->flags & ~EMPTY;
-			if ((next->size - size) > sizeof(mle))
-			{
-				// split chunk
-				char *aux = (char*) (next + 1);
-				aux += size;
-				mle *newly_split = (mle*) aux;
-				newly_split->next = next->next;
-				newly_split->size = next->size - size - sizeof(mle);
-				newly_split->flags = EMPTY;
-				next->next = newly_split;
-				next->size = size;
+			if ((next->size - size) > sizeof(mle)) {
+				#if debug
+				printf("Splitting chunk.\n");
+				#endif
+
+				mle *newly_split = split_chunk(next, size);
+
+				#if debug
+				printf("%p [%i / %x] -> %p\n", newly_split, newly_split->size, newly_split->flags, newly_split->next);
+				printf("Links: %p -> %p -> %p\n", next, newly_split, newly_split->next);
+				#endif
 			}
 			// if not, just return the whole thing
 			void *ret_split = (void*) (next + 1);
 			unlock(&mutex);
+
+			#if debug
+			printf("=== malloc: returning %08p. ===\n", ret_split);
+			#endif
+
+			assert(((char*) ret_split - (char*) next) == sizeof(mle));
+		
+			// Assert that memory is handed out word-aligned.
+			assert(((l4_addr_t) ret_split % sizeof(l4_umword_t)) == 0);
+
+			#if debug
+			enter_kdebug("malloc pre-return");
+			#endif
+
 			return ret_split;
-		}
-		else
-		{
+
+		} else {
 			prev = next;
 			next = next->next;
 		}
-	}
-	while (next != &list_head);
-	
+	} while (next != &list_head);
+
 	// no suitable chunk found
 	L4::Cap<L4Re::Dataspace> ds = L4Re::Util::cap_alloc.alloc<L4Re::Dataspace>();
 	if (!ds.is_valid()) {
 		unlock(&mutex);
+
 		return 0;
 	}
 	long err = L4Re::Env::env()->mem_alloc()->alloc(EXTENSION_SIZE, ds);
 	if (err) {
 		unlock(&mutex);
+
 		return 0;
 	}
 	l4_addr_t addr = 0;
 	err = L4Re::Env::env()->rm()->attach(&addr, EXTENSION_SIZE, L4Re::Rm::Search_addr, ds, 0);
 	if (err) {
 		unlock(&mutex);
+
 		return 0;
 	}
 	prev->next = (mle*) addr;
@@ -123,9 +214,23 @@ void *malloc(unsigned size) throw()
 	ret->next = new_next;
 	ret->size = size;
 	ret->flags = 0;
+
+	#if debug
 	printf("=== malloc: returning %08p. ===\n", (void*) (ret + 1));
+	#endif
+	
 	void *ret_new = (void*) (ret + 1);
 	unlock(&mutex);
+
+	assert(((char*) ret_new - (char*) ret) == sizeof(mle));
+
+	// Assert that memory is handed out word-aligned.
+	assert(((l4_addr_t) ret_new % sizeof(l4_umword_t)) == 0);
+
+	#if debug
+	enter_kdebug("malloc pre_return");
+	#endif
+
 	return ret_new;
 }
 
@@ -133,12 +238,12 @@ void *malloc(unsigned size) throw()
 void free(void *p) throw()
 {
 	lock(&mutex);
-	printf("Free: %08p\n", p);
+	printf("=== free: %08p ===\n", p);
 	//enter_kdebug("Entering free.");
 	// FIXME free() does nothing, for the purpose of tracking down the "Operation not permitted" bug.
 	// just mark chunk as free, without any compaction yet
-	//mle *to_free = (mle*) p - 1;
-	//to_free->flags = to_free->flags | EMPTY;
+	mle *to_free = (mle*) p - 1;
+	to_free->flags = to_free->flags | EMPTY;
 	unlock(&mutex);
 	//enter_kdebug("Exiting free.");
 }
