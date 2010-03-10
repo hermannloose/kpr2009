@@ -26,6 +26,8 @@ class FBMuxer : public L4::Server_object
 		// Virtual framebuffers
 		std::list<VFB*> *vfbs;
 		int selected;
+
+		int switch_to(int which);
 	public:
 		FBMuxer();
 		int dispatch(l4_umword_t obj, L4::Ipc_iostream &ios);
