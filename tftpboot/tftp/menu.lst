@@ -1,5 +1,5 @@
-default 3
-timeout 2
+default 1
+timeout 3
 
 title Pong
   kernel /bin/x86_586/bootstrap
@@ -13,6 +13,21 @@ title Pong
   module /conf/cfg.pong
   vbeset 0x117
 
+title Mein Pong
+  kernel /bin/x86_586/bootstrap
+  modaddr 0x02000000
+  module /bin/fiasco -serial_esc -jdb_cmd=JS
+  module /bin/x86_586/l4f/sigma0
+  module /bin/x86_586/l4f/moe rom/kpr.cfg
+  module /bin/x86_586/l4f/l4re
+	module /bin/x86_586/l4f/loader rom/kpr_pong.cfg
+	module /bin/x86_586/l4f/fb_muxer
+	module /bin/x86_586/l4f/kbd
+  module /bin/x86_586/l4f/pong-server
+  module /bin/x86_586/l4f/pong-client
+  module /conf/kpr.cfg
+	module /conf/kpr_pong.cfg
+  vbeset 0x117
 
 title Client-Server
   kernel /bin/x86_586/bootstrap
@@ -84,6 +99,7 @@ title Virtual framebuffer test
 	module /bin/x86_586/l4f/loader
 	module /bin/x86_586/l4f/console
 	module /bin/x86_586/l4f/fb_muxer
+	module /bin/x86_586/l4f/test_switcher
 	module /conf/test_fb_muxer.cfg
 	module /conf/test_fb_muxer_loader.cfg
   vbeset 0x117

@@ -50,6 +50,7 @@ class Console_server : public L4::Server_object
     void render();
   public:
     Console_server();
+		Console_server(std::string bootmsg);
     int dispatch(l4_umword_t obj, L4::Ipc_iostream &ios);
 };
 

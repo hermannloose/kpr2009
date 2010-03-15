@@ -19,6 +19,11 @@
 
 Console_server::Console_server()
 {
+	Console_server::Console_server("");
+}
+
+Console_server::Console_server(std::string bootmsg)
+{
 	fb = L4Re::Util::cap_alloc.alloc<L4Re::Framebuffer>();
 	if(!fb.is_valid()){
 		std::cerr << "Could not get capability slot!" << std::endl;
@@ -50,13 +55,11 @@ Console_server::Console_server()
 	font_width = gfxbitmap_font_width((void*) GFXBITMAP_DEFAULT_FONT);
 	lines = info.y_res / gfxbitmap_font_height((void*) GFXBITMAP_DEFAULT_FONT);
 	chars = info.x_res / gfxbitmap_font_width((void*) GFXBITMAP_DEFAULT_FONT);
-	window_start = 0;
 
 	history = new std::list<std::string>();
-	history->push_back("Console started.");
-	history->push_back("Hello World!");
+	history->push_back(bootmsg);
 	render();
-	window_start = 1;
+	window_start = 0;
 	render();
 }
 
@@ -176,7 +179,11 @@ int main(int argc, char **argv)
 	
 	L4::Server<L4::Basic_registry_dispatcher> server(l4_utcb());
 	L4Re::Util::Object_registry registry(L4Re::Env::env()->main_thread(), L4Re::Env::env()->factory());
-	Console_server *console = new Console_server();
+	
+	// FIXME Debug output
+	std::cout << argv[1] << std::endl;
+	Console_server *console = new Console_server(argv[1]);
+
 	registry.register_obj(console);
 	
 	if(L4Re::Env::env()->names()->register_obj("console", console->obj_cap())){
