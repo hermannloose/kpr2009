@@ -1,7 +1,7 @@
-build
-doc
-kernel
-Makefile
-tools
+/build
+/doc
+/kernel
+/tools
 
-rom.iso
+/Makefile
+/rom.iso

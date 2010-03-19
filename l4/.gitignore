@@ -1,6 +1,8 @@
-conf
-COPYING-GPL-2
-COPYING-LGPL-2.1
-LICENSING
-mk
-tool
+/conf
+/COPYING-GPL-2
+/COPYING-LGPL-2.1
+/LICENSING
+/mk
+/tool
+
+/Makefile
