@@ -6,16 +6,19 @@
 class Paddle : cxx::Thread
 {
 	private:
-		char up_press, up_release;
-		char down_press, down_release;
+		int up_press, up_release;
+		int down_press, down_release;
 		int position;
 		int velocity;
 		L4::Cap<void> kbd;
 		L4::Cap<void> svr;
+		unsigned long paddle;
 
 		char stack[1024];
 	public:
-		Paddle(int velocity, char up_press, char up_release, char down_press, char down_release);
+		Paddle(int velocity, int up_press, int up_release, int down_press, int down_release);
+		int lives();
+		void move(int pos);
 		void run();
 };
 

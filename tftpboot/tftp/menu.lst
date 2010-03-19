@@ -20,9 +20,10 @@ title Mein Pong
   module /bin/x86_586/l4f/sigma0
   module /bin/x86_586/l4f/moe rom/kpr.cfg
   module /bin/x86_586/l4f/l4re
-	module /bin/x86_586/l4f/loader rom/kpr_pong.cfg
+	module /bin/x86_586/l4f/loader
 	module /bin/x86_586/l4f/fb_muxer
 	module /bin/x86_586/l4f/kbd
+	module /bin/x86_586/l4f/paddle
   module /bin/x86_586/l4f/pong-server
   module /bin/x86_586/l4f/pong-client
   module /conf/kpr.cfg

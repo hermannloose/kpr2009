@@ -129,11 +129,17 @@ int FBMuxer::dispatch(l4_umword_t obj, L4::Ipc_iostream &ios)
 				registry.register_obj(vfb);
 				registry.register_obj(vfb->fbsvr);
 
-				ios << vfb->fbsvr->obj_cap();
+				if (vfbs->size() == 1) {
+					#if debug
+					printf("This is the first virtual framebuffer created. Display it.\n");
+					#endif
+					vfb->write_through(fb_addr);
+				}
 
+				ios << vfb->fbsvr->obj_cap();
 			}
 			printf("Created new virtual framebuffer.\n");
-			
+
 			return L4_EOK;
 
 		// Switch to an existing virtual framebuffer for display.
