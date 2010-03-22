@@ -17,6 +17,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#define debug 1
+
 Console_server::Console_server()
 {
 	Console_server::Console_server("");
@@ -59,8 +61,6 @@ Console_server::Console_server(std::string bootmsg)
 	history = new std::list<std::string>();
 	history->push_back(bootmsg);
 	render();
-	window_start = 0;
-	render();
 }
 
 int Console_server::dispatch(l4_umword_t obj, L4::Ipc_iostream &ios)
@@ -72,21 +72,27 @@ int Console_server::dispatch(l4_umword_t obj, L4::Ipc_iostream &ios)
 		printf("Console %p: opening service (dummy).\n", this);
 		L4::Opcode opcode;
 		ios >> opcode;
+		
 		if (opcode == L4Re::Service_::Open) {
 			ios << this;
+			
 			return L4_EOK;
 		} else {
+			
 			return -L4_ENOSYS;
 		}
 	}
 
 	if(tag.label() != Protocol::Console){
+		
 		return -L4_EBADPROTO;
 	}
 
 	L4::Opcode opcode;
 	ios >> opcode;
+	
 	switch(opcode){
+		
 		case Opcode::Put:
 			char *msg;
 			unsigned long int msg_size;
@@ -94,10 +100,19 @@ int Console_server::dispatch(l4_umword_t obj, L4::Ipc_iostream &ios)
 			std::cout << "Received: [" << msg << "]" << std::endl;
 			history->push_back(msg);
 			render();
+		
 			return L4_EOK;
+
+		case Opcode::Refresh:
+			render();
+
+			return L4_EOK;
+
 		case Opcode::Scroll:
+			
 			int scroll;
 			ios >> scroll;
+			
 			switch (scroll) {
 				case LINE_UP:
 					printf("Scrolling: line up.\n");
@@ -131,8 +146,11 @@ int Console_server::dispatch(l4_umword_t obj, L4::Ipc_iostream &ios)
 					break;
 			}
 			render();
+			
 			return L4_EOK;
+		
 		default:
+			
 			return -L4_ENOSYS;
 	}
 	return 0;
@@ -146,18 +164,22 @@ void Console_server::clear()
 
 void Console_server::render()
 {
+	#if debug
+	std::cout << "=== Rendering ===" << std::endl;
+	#endif
 	//clear();
 	// Start with some padding around the text.
 	int x = 1;
 	int y = 1 + font_height;
 	int line = 0;
-	//std::cout << "=== Rendering ===" << std::endl;
 	std::list<std::string>::iterator iter;
 	for(iter = history->begin(); iter != history->end(); iter++){
 		/*for (int i = 0; i < window_start; i++) {
 			iter++;
 		}*/
-		//std::cout << "[" << *iter << "]";
+		#if debug
+		std::cout << "[" << *iter << "]";
+		#endif
 		gfxbitmap_font_text(
 			&base_addr,
 			(l4re_fb_info_t*) &info,
@@ -170,7 +192,9 @@ void Console_server::render()
 		line += 1;
 		if(y > info.y_res || line >= lines) break;
 	}
-	//std::cout << std::endl << "=== Finished! ===" << std::endl;
+	#if debug
+	std::cout << std::endl << "=== Finished! ===" << std::endl;
+	#endif
 }
 
 int main(int argc, char **argv)

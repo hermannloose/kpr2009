@@ -24,7 +24,7 @@ namespace Opcode
 {
   enum Opcodes
   {
-    Put, Scroll
+    Put, Refresh, Scroll
   };
 };
 

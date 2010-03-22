@@ -21,6 +21,8 @@
 
 #define debug 0
 
+// FIXME Refactor this using a double-linked list
+
 const unsigned EXTENSION_SIZE = 32768; // 32k 
 
 const unsigned char EMPTY = 1;
@@ -234,16 +236,39 @@ void *malloc(unsigned size) throw()
 	return ret_new;
 }
 
-
 void free(void *p) throw()
 {
-	lock(&mutex);
-	printf("=== free: %08p ===\n", p);
-	//enter_kdebug("Entering free.");
-	// FIXME free() does nothing, for the purpose of tracking down the "Operation not permitted" bug.
-	// just mark chunk as free, without any compaction yet
+	assert(p != NULL);
+
+	#if debug
+	printf("free %08p\n", p);
+	#endif
+
+	mle *next = &list_head;
+	mle *prev = next;
 	mle *to_free = (mle*) p - 1;
+
+	lock(&mutex);
+
 	to_free->flags = to_free->flags | EMPTY;
+
+	do {
+		if (next == to_free) {
+			// Compact chunks if possible.
+			if (next->next->flags & EMPTY) {
+				next->size += sizeof(mle) + next->next->size;
+				next->next = next->next->next;
+			}
+			if (prev->flags & EMPTY) {
+				prev->size += sizeof(mle) + next->size;
+				prev->next = next->next;
+			}
+			break;
+		} else {
+			prev = next;
+			next = next->next;
+		}
+	} while (next != &list_head);
+	
 	unlock(&mutex);
-	//enter_kdebug("Exiting free.");
 }
