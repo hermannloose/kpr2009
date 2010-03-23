@@ -27,17 +27,15 @@ const unsigned EXTENSION_SIZE = 32768; // 32k
 
 const unsigned char EMPTY = 1;
 
-const unsigned PAD_SIZE = sizeof(l4_umword_t) - ((sizeof(unsigned) + sizeof(unsigned char)) % sizeof(l4_umword_t));
-
 typedef struct mem_list_entry
 {
 	mem_list_entry *next;
-	unsigned size;
+	mem_list_entry *prev;
+	unsigned int size;
 	unsigned char flags;
-	char pad[PAD_SIZE];
 } mle;
 
-mle list_head = {&list_head, 0, 0};
+mle list_head = {&list_head, &list_head, 0, 0};
 
 // FIXME: Semaphores would be nicer, but is this possible here?
 
@@ -68,7 +66,7 @@ l4_umword_t mutex = 0;
 mle * split_chunk(mle *chunk, unsigned size)
 {
 	#if debug
-	printf("Chunk to split: %p size %i flags %x next %p\n", chunk, chunk->size, chunk->flags, chunk->next, size);
+	printf("Chunk to split: %p size %i flags %x next %p prev %p\n", chunk, chunk->size, chunk->flags, chunk->next, chunk->prev);
 	#endif
 
 	// PRE
@@ -84,11 +82,13 @@ mle * split_chunk(mle *chunk, unsigned size)
 
 	mle *ins = (mle*) aux;
 	ins->next = chunk->next;
+	chunk->next->prev = ins;
+	ins->prev = chunk;
 	ins->size = chunk->size - (size + sizeof(mle));
 	ins->flags = EMPTY;
 
 	#if debug
-	printf("New chunk: %p size %i flags %x next %p\n", ins, ins->size, ins->flags, ins->next);
+	printf("New chunk: %p size %i flags %x next %p prev %p\n", ins, ins->size, ins->flags, ins->next, ins->prev);
 	#endif
 
 	chunk->next = ins;
@@ -107,6 +107,8 @@ mle * split_chunk(mle *chunk, unsigned size)
 
 void *malloc(unsigned size) throw()
 {
+	l4_msgtag_t err;
+
 	#if debug
 	printf("\nlist-head: %p size: %i\n", &list_head, size);
 	enter_kdebug("malloc");
@@ -130,41 +132,40 @@ void *malloc(unsigned size) throw()
 		#endif
 	}
 
-	// Assert that memory is requested out word-aligned.
+	// Assert that memory is requested word-aligned.
 	assert(!(size % sizeof(l4_umword_t)));
 
-	mle *next = &list_head;
-	mle *prev = next;
+	mle *iter = &list_head;
 
 	do {
-		assert(next != NULL);
+		assert(iter != NULL);
 
-		if ((next->flags & EMPTY) && (next->size >= size)) {
+		if ((iter->flags & EMPTY) && (iter->size >= size)) {
 			// Assert that the chunk is really large enough.
-			assert(next < next->next ? (next - next->next) > size : 1);
+			assert(iter < iter->next ? (iter - iter->next) > size : 1);
 
-			next->flags = next->flags & ~EMPTY;
-			if ((next->size - size) > sizeof(mle)) {
+			iter->flags = iter->flags & ~EMPTY;
+			if ((iter->size - size) > sizeof(mle)) {
 				#if debug
 				printf("Splitting chunk.\n");
 				#endif
 
-				mle *newly_split = split_chunk(next, size);
+				mle *newly_split = split_chunk(iter, size);
 
 				#if debug
 				printf("%p [%i / %x] -> %p\n", newly_split, newly_split->size, newly_split->flags, newly_split->next);
-				printf("Links: %p -> %p -> %p\n", next, newly_split, newly_split->next);
+				printf("Links: %p -> %p -> %p\n", iter, newly_split, newly_split->next);
 				#endif
 			}
 			// if not, just return the whole thing
-			void *ret_split = (void*) (next + 1);
+			void *ret_split = (void*) (iter + 1);
 			unlock(&mutex);
 
 			#if debug
 			printf("=== malloc: returning %08p. ===\n", ret_split);
 			#endif
 
-			assert(((char*) ret_split - (char*) next) == sizeof(mle));
+			assert(((char*) ret_split - (char*) iter) == sizeof(mle));
 		
 			// Assert that memory is handed out word-aligned.
 			assert(((l4_addr_t) ret_split % sizeof(l4_umword_t)) == 0);
@@ -176,55 +177,61 @@ void *malloc(unsigned size) throw()
 			return ret_split;
 
 		} else {
-			prev = next;
-			next = next->next;
+			iter = iter->next;
 		}
-	} while (next != &list_head);
+	} while (iter != &list_head);
 
-	// no suitable chunk found
+	// No suitable chunk found.
+
+	// Allocate new memory to hand out.
 	L4::Cap<L4Re::Dataspace> ds = L4Re::Util::cap_alloc.alloc<L4Re::Dataspace>();
 	if (!ds.is_valid()) {
+		printf("Could not get a valid dataspace capability!\n");
 		unlock(&mutex);
 
-		return 0;
+		return NULL;
 	}
-	long err = L4Re::Env::env()->mem_alloc()->alloc(EXTENSION_SIZE, ds);
-	if (err) {
+	if (L4Re::Env::env()->mem_alloc()->alloc(EXTENSION_SIZE, ds)) {
+		printf("Could not allocate a new dataspace!\n");
 		unlock(&mutex);
 
-		return 0;
+		return NULL;
 	}
+
+	// Attach the allocated memory in the region map.
 	l4_addr_t addr = 0;
-	err = L4Re::Env::env()->rm()->attach(&addr, EXTENSION_SIZE, L4Re::Rm::Search_addr, ds, 0);
-	if (err) {
+
+	if (L4Re::Env::env()->rm()->attach(&addr, EXTENSION_SIZE, L4Re::Rm::Search_addr, ds, 0)) {
+		printf("Could not attach allocated memory in region map!\n");
 		unlock(&mutex);
 
-		return 0;
+		return NULL;
 	}
-	prev->next = (mle*) addr;
-	mle *new_next = &list_head;
-	if ((EXTENSION_SIZE - size) > sizeof(mle))
-	{
-		char *aux = (char*) (((mle*) addr) + 1);
-		aux += size;
-		new_next = (mle*) aux;
-		new_next->next = &list_head;
-		new_next->size = EXTENSION_SIZE - 2 * sizeof(mle) - size;
-		new_next->flags = EMPTY;
+
+	mle *allocated = (mle*) addr;
+	
+	allocated->next = iter;
+	allocated->prev = iter->prev;
+	list_head.prev = allocated;
+	allocated->size = EXTENSION_SIZE - sizeof(mle);
+	allocated->flags = EMPTY;
+
+	allocated->prev->next = allocated;
+
+	if ((allocated->size - size) > sizeof(mle)) {
+		split_chunk(allocated, size);
 	}
-	mle *ret = prev->next;
-	ret->next = new_next;
-	ret->size = size;
-	ret->flags = 0;
+
+	allocated->flags = allocated->flags & ~EMPTY;
 
 	#if debug
 	printf("=== malloc: returning %08p. ===\n", (void*) (ret + 1));
 	#endif
 	
-	void *ret_new = (void*) (ret + 1);
+	void *ret_new = (void*) (allocated + 1);
 	unlock(&mutex);
 
-	assert(((char*) ret_new - (char*) ret) == sizeof(mle));
+	assert(((char*) ret_new - (char*) allocated) == sizeof(mle));
 
 	// Assert that memory is handed out word-aligned.
 	assert(((l4_addr_t) ret_new % sizeof(l4_umword_t)) == 0);
@@ -244,31 +251,24 @@ void free(void *p) throw()
 	printf("free %08p\n", p);
 	#endif
 
-	mle *next = &list_head;
-	mle *prev = next;
-	mle *to_free = (mle*) p - 1;
-
 	lock(&mutex);
 
-	to_free->flags = to_free->flags | EMPTY;
+	mle *to_free = (mle*) p - 1;
+	mle *next = to_free->next;
+	mle *prev = to_free->prev;
 
-	do {
-		if (next == to_free) {
-			// Compact chunks if possible.
-			if (next->next->flags & EMPTY) {
-				next->size += sizeof(mle) + next->next->size;
-				next->next = next->next->next;
-			}
-			if (prev->flags & EMPTY) {
-				prev->size += sizeof(mle) + next->size;
-				prev->next = next->next;
-			}
-			break;
-		} else {
-			prev = next;
-			next = next->next;
-		}
-	} while (next != &list_head);
-	
+	to_free->flags |= EMPTY;
+
+	if (next->flags & EMPTY) {
+		to_free->next = next->next;
+		to_free->next->prev = to_free;
+		to_free->size += sizeof(mle) + next->size;
+	}
+	if (prev->flags & EMPTY) {
+		prev->next = to_free->next;
+		to_free->next->prev = prev;
+		prev->size += sizeof(mle) + to_free->size;
+	}
+
 	unlock(&mutex);
 }
