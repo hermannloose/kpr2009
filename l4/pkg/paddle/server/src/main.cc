@@ -5,30 +5,87 @@
 #include <l4/re/util/cap_alloc>
 
 #include <assert.h>
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
 #include <unistd.h>
 
 #define debug 1
 
-Paddle::Paddle(int velocity, int up_press, int up_release, int down_press, int down_release)
+sem_t paddle_started;
+
+Input::Input(Paddle *parent, int up_press, int up_release, int down_press, int down_release)
 : cxx::Thread(stack + sizeof(stack))
 {
+	this->parent = parent;
+
+}
+
+void Input::run()
+{
+	#if debug
+	printf("%p: Input thread starting.\n", pthread_self());
+	#endif
+
+	L4::Ipc_iostream ios(l4_utcb());
+	int scancode = 0;
+
+	sem_wait(&paddle_started);
+
+	#if debug
+	printf("Processing input ...\n");
+	#endif
+
+	while (1) {
+		ios.reset();
+		ios.call(kbd.cap(), 0);
+		ios >> scancode;
+
+		if (scancode == up_press) parent->move(-1);
+		if (scancode == up_release) parent->move(0);
+		if (scancode == down_press) parent->move(1);
+		if (scancode == down_release) parent->move(0);
+
+		sleep(1);
+	}
+}
+
+Paddle::Paddle(int velocity, const int up_press, const int up_release, const int down_press, const int down_release)
+: cxx::Thread(stack + sizeof(stack))
+{
+/*	Input *input = new Input(this, up_press, up_release, down_press, down_release);
+	
+	#if debug
+	printf("Input thread created.\n");
+	#endif
+
+	input->start();
+
+	#if debug
+	printf("Input thread started.\n");
+	#endif
+
+	sem_init(&mutex, 0, 1);
+*/
 	l4_msgtag_t err;
 
+
 	assert(velocity != 0);
-
 	this->velocity = velocity;
-
 	position = 0;
+	direction = 0;
+
+	#if debug
+	printf("UP: %i / %i DOWN: %i / %i\n", up_press, up_release, down_press, down_release);
+	#endif
 
 	this->up_press = up_press;
 	this->up_release = up_release;
 	this->down_press = down_press;
 	this->down_release = down_release;
 
-	printf("UP: %i / %i DOWN: %i / %i\n", up_press, up_release, down_press, down_release);
-
+	// Get keyboard driver.
 	kbd = L4Re::Util::cap_alloc.alloc<void>();
 	if (!kbd.is_valid()) {
 		printf("%04i: Could not get a valid capability slot!\n", __LINE__);
@@ -86,83 +143,62 @@ int Paddle::lives()
 	return lives;
 }
 
-void Paddle::move(int pos)
+void Paddle::move(int direction)
 {
-	#if debug
-	printf("Moving paddle to %i.\n", pos);
-	#endif
-
-	l4_msgtag_t err;
-
-	L4::Ipc_iostream ios(l4_utcb());
-	ios << 1UL << pos;
-
-	if (l4_error(err = ios.call(paddle))) {
-		printf("%04i: Failed to move paddle!\n", __LINE__);
-
-		return;
-	}
-
-	position = pos;
+	assert(-1 <= direction && direction <= 1);
+	sem_wait(&mutex);
+	this->direction = direction;
+	sem_post(&mutex);
 }
 
 void Paddle::run()
 {
-	move(0);
+	l4_msgtag_t err;
 
 	L4::Ipc_iostream ios(l4_utcb());
-	int scancode = -1;
 
-	int moving = 0;
+	clock_t last_tick = clock();
+	clock_t curr_tick = clock();
+	double seconds = 0.0;
+
+	int scancode;
 
 	while (1) {
-		printf("Lives: %i\n", lives());
-		// Get scancode.
 		ios.reset();
-		ios.call(kbd.cap(), 0);
+		err = ios.call(kbd.cap(), 0);
+		if (l4_ipc_error(err, l4_utcb())) {
+			printf("Error while reading scancode!\n");
+		}
 		ios >> scancode;
 
 		#if debug
 		printf("Scancode %i received.\n", scancode);
 		#endif
 
-		if (scancode == up_press) {
-			#if debug
-			printf("Start moving up.\n");
-			#endif
-			if (moving == 0) moving = -1;
-		}
+		if (scancode == up_press) direction = -1;
+		if (scancode == up_release) direction = 0;
+		if (scancode == down_press) direction = -1;
+		if (scancode == down_release) direction = 0;
 
-		if (scancode == up_release) {
-			#if debug
-			printf("Stop moving up.\n");
-			#endif
-			if (moving == -1) moving = 0;
-		}
-
-		if (scancode == down_press) {
-			#if debug
-			printf("Start moving down.\n");
-			#endif
-			if (moving == 0) moving = 1;
-		}
-
-		if (scancode == down_release) {
-			#if debug
-			printf("Stop moving down.\n");
-			#endif
-			if (moving == 1) moving = 0;
-		}
+		curr_tick = clock();
+		seconds = (curr_tick - last_tick) / CLOCKS_PER_SEC;
 
 		#if debug
-		printf("Moving: %i\n", moving);
+		printf("%i last tick\n%i current tick\n%d seconds since last iteration.\n", last_tick, curr_tick, seconds);
 		#endif
 
-		int move_to = position + velocity * moving;
-		if (move_to < 0) move_to = 0;
-		if (move_to > 1023) move_to = 1023;
-		move(move_to);
+		position += (velocity * direction * seconds);
+		if (position < 0) position = 0;
+		if (position > 1023) position = 1023;
+		
+		ios.reset();
+		ios << 1UL << position;
+		ios.call(paddle);
+		// FIXME Error handling
 
+		last_tick = curr_tick;
+
+		sleep(0.2);
 	}
 }
 
@@ -175,8 +211,14 @@ int main(int argc, char **argv)
 	}
 
 	printf("Paddle starting.\n");
+	
+	sem_init(&paddle_started, 0, 0);
+
 	// FIXME First cast is dirty.
 	Paddle *paddle = new Paddle(atoi(argv[1]), atoi(argv[2]), atoi(argv[3]), atoi(argv[4]), atoi(argv[5]));
+
+	sem_post(&paddle_started);
+
 	paddle->run();
 
   return 0;

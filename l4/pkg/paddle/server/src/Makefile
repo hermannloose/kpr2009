@@ -8,6 +8,8 @@ SRC_C =
 SRC_CC = main.cc
 
 # list requirements of your program here
-REQUIRES_LIBS = cxx_thread_e
+REQUIRES_LIBS = cxx_thread_e libc
+
+L4_MULTITHREADED = y
 
 include $(L4DIR)/mk/prog.mk
