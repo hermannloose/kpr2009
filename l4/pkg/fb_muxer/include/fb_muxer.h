@@ -52,7 +52,8 @@ class VFB : public L4::Server_object, public L4Re::Util::Dataspace_svr
 class VFB_fb_svr : public L4::Server_object, public L4Re::Util::Framebuffer_svr
 {
 	public:
-		VFB_fb_svr(L4Re::Framebuffer::Info, L4::Cap<L4Re::Dataspace>);
+		//VFB_fb_svr(L4Re::Framebuffer::Info, L4::Cap<L4Re::Dataspace>);
+		VFB_fb_svr(L4Re::Framebuffer::Info, L4::Cap<void>);
 		int dispatch(l4_umword_t obj, L4::Ipc_iostream &ios);
 };
 

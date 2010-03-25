@@ -6,9 +6,13 @@
 #include <l4/re/util/cap_alloc>
 #include <l4/re/util/fb>
 #include <l4/re/util/object_registry>
+#include <l4/sys/capability>
 
 #include <assert.h>
 #include <math.h>
+#include <pthread.h>
+#include <pthread-l4.h>
+#include <semaphore.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -126,7 +130,6 @@ int FBMuxer::dispatch(l4_umword_t obj, L4::Ipc_iostream &ios)
 				#endif
 				vfbs->push_back(vfb);
 
-				registry.register_obj(vfb);
 				registry.register_obj(vfb->fbsvr);
 
 				if (vfbs->size() == 1) {
@@ -199,6 +202,8 @@ int FBMuxer::switch_to(int which)
 	return old;
 }
 
+void *vfb_dispatch(void *args);
+
 VFB::VFB(L4Re::Framebuffer::Info info, int size)
 {
 	#if debug
@@ -232,7 +237,7 @@ VFB::VFB(L4Re::Framebuffer::Info info, int size)
 		exit(1);
 	}
 	#if debug
-	printf("Attached dataspace memory to region map.\n");
+	printf("Attached dataspace @ %p.\n", vfb_start);
 	#endif
 
 	#if debug
@@ -244,7 +249,19 @@ VFB::VFB(L4Re::Framebuffer::Info info, int size)
 	_ds_size = size;
 	_rw_flags = Writable;
 
-	fbsvr = new VFB_fb_svr(info, vfb);
+	registry.register_obj(this);
+
+	fbsvr = new VFB_fb_svr(info, this->obj_cap());
+}
+
+void *vfb_dispatch(void *args)
+{
+	L4::Server<L4::Basic_registry_dispatcher> server(l4_utcb());
+	#if debug
+	printf("Thread %08p: Starting dataspace dispatcher.\n", pthread_self());
+	#endif
+	server.loop();
+	return NULL;
 }
 
 VFB::~VFB() throw()
@@ -332,20 +349,21 @@ void VFB::write_through(l4_addr_t start)
 int VFB::dispatch(l4_umword_t obj, L4::Ipc_iostream &ios)
 {
 	#if debug
-	printf("Dataspace_svr dispatching.\n");
+	printf("Thread %08p: Dataspace_svr dispatching.\n", pthread_self());
 	#endif
 
 	return L4Re::Util::Dataspace_svr::dispatch(obj, ios);
 };
 
-VFB_fb_svr::VFB_fb_svr(L4Re::Framebuffer::Info info, L4::Cap<L4Re::Dataspace> vfb)
+//VFB_fb_svr::VFB_fb_svr(L4Re::Framebuffer::Info info, L4::Cap<L4Re::Dataspace> vfb)
+VFB_fb_svr::VFB_fb_svr(L4Re::Framebuffer::Info info, L4::Cap<void> vfb)
 {
 	#if debug
 	printf("Creating new VFB_fb_svr.\n");
 	#endif
 
 	// Set up information for Framebuffer_svr.
-	_fb_ds = vfb;
+	_fb_ds = L4::cap_cast<L4Re::Dataspace>(vfb);
 	_info = info;
 }
 
@@ -353,7 +371,7 @@ VFB_fb_svr::VFB_fb_svr(L4Re::Framebuffer::Info info, L4::Cap<L4Re::Dataspace> vf
 int VFB_fb_svr::dispatch(l4_umword_t obj, L4::Ipc_iostream &ios)
 {
 	#if debug
-	printf("Framebuffer_svr dispatching.\n");
+	printf("Thread %08p: Framebuffer_svr dispatching.\n", pthread_self());
 	#endif
 
 	return L4Re::Util::Framebuffer_svr::dispatch(obj, ios);
