@@ -10,9 +10,6 @@
 
 #include <assert.h>
 #include <math.h>
-#include <pthread.h>
-#include <pthread-l4.h>
-#include <semaphore.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -22,24 +19,7 @@ static L4Re::Util::Object_registry registry(
 	L4Re::Env::env()->main_thread(),
 	L4Re::Env::env()->factory()
 );
-/*
-void unmap_region(void* start, void* end)
-{
-	assert(start < end);
-	void* temp = start;
-	int diff = 0;
-	int unmap_size = 0;
-	while (temp < end) {
-		diff = temp - end;
-		unmap_size = floor(log(diff) / log(2));
-		#if debug
-		printf("Unmapping: 2^%i bytes from %p.\n", unmap_size, temp);
-		#endif
-		l4_task_unmap(L4Re::Env::env()->task().cap(), l4_fpage(temp, unmap_size, L4_FPAGE_RWX), L4_FP_OTHER_SPACES);
-		temp += pow(2, unmap_size);
-	}
-}
-*/
+
 FBMuxer::FBMuxer()
 {
 	l4_msgtag_t err;
@@ -86,10 +66,6 @@ FBMuxer::FBMuxer()
 		exit(1);
 	}
 
-	#if debug
-	printf("real FB @ %p\n", fb_addr);
-	#endif
-
 	vfbs = new std::list<VFB*>();
 	selected = 0;
 }
@@ -125,17 +101,10 @@ int FBMuxer::dispatch(l4_umword_t obj, L4::Ipc_iostream &ios)
 				printf("Creating new VFB.\n");
 				#endif
 				VFB *vfb = new VFB(info, fbds->size());
-				#if debug
-				printf("Pushing VFB to list.\n");
-				#endif
+				
 				vfbs->push_back(vfb);
 
-				registry.register_obj(vfb->fbsvr);
-
 				if (vfbs->size() == 1) {
-					#if debug
-					printf("This is the first virtual framebuffer created. Display it.\n");
-					#endif
 					vfb->write_through(fb_addr);
 				}
 
@@ -202,8 +171,6 @@ int FBMuxer::switch_to(int which)
 	return old;
 }
 
-void *vfb_dispatch(void *args);
-
 VFB::VFB(L4Re::Framebuffer::Info info, int size)
 {
 	#if debug
@@ -237,11 +204,11 @@ VFB::VFB(L4Re::Framebuffer::Info info, int size)
 		exit(1);
 	}
 	#if debug
-	printf("Attached dataspace @ %p.\n", vfb_start);
+	printf("Attached dataspace @ %p.\n", (void*) vfb_start);
 	#endif
 
 	#if debug
-	printf("Zeroing %i bytes from %p.\n", size, vfb_start);
+	printf("Zeroing %i bytes from %p.\n", size, (void*) vfb_start);
 	#endif
 	memset((void*) vfb_start, 0, size);
 
@@ -252,16 +219,6 @@ VFB::VFB(L4Re::Framebuffer::Info info, int size)
 	registry.register_obj(this);
 
 	fbsvr = new VFB_fb_svr(info, this->obj_cap());
-}
-
-void *vfb_dispatch(void *args)
-{
-	L4::Server<L4::Basic_registry_dispatcher> server(l4_utcb());
-	#if debug
-	printf("Thread %08p: Starting dataspace dispatcher.\n", pthread_self());
-	#endif
-	server.loop();
-	return NULL;
 }
 
 VFB::~VFB() throw()
@@ -275,34 +232,24 @@ void VFB::buffer()
 	l4_addr_t fb_start = _ds_start;
 	_ds_start = vfb_start;
 
-	#if debug
-	printf("VFB %p buffer(): old DS @ %p new DS @ %p\n", this, fb_start, _ds_start);
-	#endif
+	printf("VFB @ %p buffering:\n  old DS @ %p\n  new DS @ %p\n", (void*) this, (void*) fb_start, (void*) _ds_start);
 
 	// Copy snapshot of real framebuffer into the virtual one.
 	memcpy((void*) _ds_start, (void*) fb_start, vfb->size());
 	
 	#if debug
-	printf("memcpy %p -> %p (%i bytes)\n", fb_start, _ds_start, vfb->size());
+	printf("memcpy %p -> %p (%i bytes)\n", (void*) fb_start, (void*) _ds_start, vfb->size());
 	#endif
 
 	// Unmap all pages in the real framebuffer.
 	l4_addr_t temp = fb_start;
 	
 	#if debug
-	printf("Unmap %p - %p.\n", fb_start, fb_start + vfb->size());
+	printf("unmap %p -> %p.\n", (void*) fb_start, (void*) (fb_start + vfb->size()));
 	#endif
 	
 	while (temp < fb_start + vfb->size()) {
-	
-		#if debug
-		printf("Unmapping page @ %p size %i\n", temp, l4_fpage_size(l4_fpage(temp, 21, L4_FPAGE_RWX)));
-		#endif
-
-		l4_msgtag_t err = l4_task_unmap(L4Re::Env::env()->task().cap(), l4_fpage(temp, 21, L4_FPAGE_RWX), L4_FP_ALL_SPACES);
-		if (l4_error(err)) {
-			printf("Error while unmapping: %i\n", err);
-		}
+		l4_task_unmap(L4Re::Env::env()->task().cap(), l4_fpage(temp, 21, L4_FPAGE_RWX), L4_FP_OTHER_SPACES);
 		temp += 1024 * 2048;
 	}
 }
@@ -312,35 +259,24 @@ void VFB::write_through(l4_addr_t start)
 {
 	_ds_start = start;
 
-	#if debug
-	printf("VFB %p write_through(): old DS @ %p new DS @ %p\n", this, vfb_start, _ds_start);
-	#endif
+	printf("VFB @ %p forwarding:\n  old DS @ %p\n  new DS @ %p\n", (void*) this, (void*) vfb_start, (void*) _ds_start);
 
 	// Copy snapshot of virtual framebuffer into the real one.
 	memcpy((void*) _ds_start, (void*) vfb_start, vfb->size());
 	
 	#if debug
-	printf("memcpy %p -> %p (%i bytes)\n", vfb_start, _ds_start, vfb->size());
+	printf("memcpy %p -> %p (%i bytes)\n", (void*) vfb_start, (void*) _ds_start, vfb->size());
 	#endif
 
 	// Unmap all pages in the virtual framebuffer.
-	//unmap_region(vfb_start, vfb_start + vfb->size());
 	l4_addr_t temp = vfb_start;
 	
 	#if debug
-	printf("Unmap %p - %p.\n", vfb_start, vfb_start + vfb->size());
+	printf("unmap %p -> %p.\n", (void*) vfb_start, (void*) (vfb_start + vfb->size()));
 	#endif
 
 	while (temp < vfb_start + vfb->size()) {
-		
-		#if debug
-		printf("Unmapping page @ %p size %i\n", temp, l4_fpage_size(l4_fpage(temp, 21, L4_FPAGE_RWX)));
-		#endif
-
-		l4_msgtag_t err = l4_task_unmap(L4Re::Env::env()->task().cap(), l4_fpage(temp, 21, L4_FPAGE_RWX), L4_FP_ALL_SPACES);
-		if (l4_error(err)) {
-			printf("Error while unmapping: %i\n", err);
-		}
+		l4_task_unmap(L4Re::Env::env()->task().cap(), l4_fpage(temp, 21, L4_FPAGE_RWX), L4_FP_OTHER_SPACES);
 		temp += 1024 * 2048;
 	}
 }
@@ -349,7 +285,7 @@ void VFB::write_through(l4_addr_t start)
 int VFB::dispatch(l4_umword_t obj, L4::Ipc_iostream &ios)
 {
 	#if debug
-	printf("Thread %08p: Dataspace_svr dispatching.\n", pthread_self());
+	printf("Dataspace_svr dispatching.\n");
 	#endif
 
 	return L4Re::Util::Dataspace_svr::dispatch(obj, ios);
@@ -365,13 +301,15 @@ VFB_fb_svr::VFB_fb_svr(L4Re::Framebuffer::Info info, L4::Cap<void> vfb)
 	// Set up information for Framebuffer_svr.
 	_fb_ds = L4::cap_cast<L4Re::Dataspace>(vfb);
 	_info = info;
+
+	registry.register_obj(this);
 }
 
 // Forward to the default implementation.
 int VFB_fb_svr::dispatch(l4_umword_t obj, L4::Ipc_iostream &ios)
 {
 	#if debug
-	printf("Thread %08p: Framebuffer_svr dispatching.\n", pthread_self());
+	printf("Framebuffer_svr dispatching.\n");
 	#endif
 
 	return L4Re::Util::Framebuffer_svr::dispatch(obj, ios);
