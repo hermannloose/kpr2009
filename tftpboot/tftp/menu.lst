@@ -21,12 +21,15 @@ title Mein Pong
   module /bin/x86_586/l4f/moe rom/kpr.cfg
   module /bin/x86_586/l4f/l4re
 	module /bin/x86_586/l4f/loader
+	module /bin/x86_586/l4f/console
 	module /bin/x86_586/l4f/fb_muxer
+	module /bin/x86_586/l4f/log2console
 	module /bin/x86_586/l4f/kbd
 	module /bin/x86_586/l4f/paddle
   module /bin/x86_586/l4f/pong-server
   module /bin/x86_586/l4f/pong-client
   module /conf/kpr.cfg
+	module /conf/kpr_console.cfg
 	module /conf/kpr_pong.cfg
   vbeset 0x117
 
