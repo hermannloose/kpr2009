@@ -3,5 +3,7 @@
 /kernel
 /tools
 
+*.vim
 /Makefile
 /rom.iso
+tags
