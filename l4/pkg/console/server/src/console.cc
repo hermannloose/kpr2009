@@ -12,6 +12,7 @@
 
 #include <iostream>
 #include <list>
+#include <string>
 #include <string.h>
 
 #include <stdio.h>
@@ -50,13 +51,21 @@ Console_server::Console_server(std::string bootmsg)
 		std::cerr << "Could not attach dataspace in region map!" << std::endl;
 		exit(1);
 	}
-	
+
+	#if debug
+	printf("Initialized framebuffer.\n"); 
+	#endif
+
 	gfxbitmap_font_init();
 	font = (void*) GFXBITMAP_DEFAULT_FONT;
 	font_height = gfxbitmap_font_height((void*) GFXBITMAP_DEFAULT_FONT);
 	font_width = gfxbitmap_font_width((void*) GFXBITMAP_DEFAULT_FONT);
 	lines = info.y_res / gfxbitmap_font_height((void*) GFXBITMAP_DEFAULT_FONT);
 	chars = info.x_res / gfxbitmap_font_width((void*) GFXBITMAP_DEFAULT_FONT);
+
+	#if debug
+	printf("Rendering boot message.\n");
+	#endif
 
 	history = new std::list<std::string>();
 	history->push_back(bootmsg);
@@ -74,7 +83,7 @@ int Console_server::dispatch(l4_umword_t obj, L4::Ipc_iostream &ios)
 		ios >> opcode;
 		
 		if (opcode == L4Re::Service_::Open) {
-			ios << this;
+			ios << this->obj_cap();
 			
 			return L4_EOK;
 		} else {
@@ -158,7 +167,9 @@ int Console_server::dispatch(l4_umword_t obj, L4::Ipc_iostream &ios)
 
 void Console_server::clear()
 {
+	#if debug
 	printf("Clear %p to %p with %06x.\n", base_addr, base_addr + info.mem_total, 0x000000);
+	#endif
 	memset(&base_addr, 0x000000, info.mem_total);
 }
 
@@ -204,9 +215,7 @@ int main(int argc, char **argv)
 	L4::Server<L4::Basic_registry_dispatcher> server(l4_utcb());
 	L4Re::Util::Object_registry registry(L4Re::Env::env()->main_thread(), L4Re::Env::env()->factory());
 	
-	// FIXME Debug output
-	std::cout << argv[1] << std::endl;
-	Console_server *console = new Console_server(argv[1]);
+	Console_server *console = new Console_server(std::string(argv[1]));
 
 	registry.register_obj(console);
 	
