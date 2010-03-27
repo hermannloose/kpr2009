@@ -282,7 +282,10 @@ void VFB::buffer()
 		printf("Unmapping page @ %p size %i\n", temp, l4_fpage_size(l4_fpage(temp, 21, L4_FPAGE_RWX)));
 		#endif
 
-		l4_task_unmap(L4Re::Env::env()->task().cap(), l4_fpage(temp, 21, L4_FPAGE_RWX), L4_FP_OTHER_SPACES);
+		l4_msgtag_t err = l4_task_unmap(L4Re::Env::env()->task().cap(), l4_fpage(temp, 21, L4_FPAGE_RWX), L4_FP_ALL_SPACES);
+		if (l4_error(err)) {
+			printf("Error while unmapping: %i\n", err);
+		}
 		temp += 1024 * 2048;
 	}
 }
@@ -317,7 +320,10 @@ void VFB::write_through(l4_addr_t start)
 		printf("Unmapping page @ %p size %i\n", temp, l4_fpage_size(l4_fpage(temp, 21, L4_FPAGE_RWX)));
 		#endif
 
-		l4_task_unmap(L4Re::Env::env()->task().cap(), l4_fpage(temp, 21, L4_FPAGE_RWX), L4_FP_OTHER_SPACES);
+		l4_msgtag_t err = l4_task_unmap(L4Re::Env::env()->task().cap(), l4_fpage(temp, 21, L4_FPAGE_RWX), L4_FP_ALL_SPACES);
+		if (l4_error(err)) {
+			printf("Error while unmapping: %i\n", err);
+		}
 		temp += 1024 * 2048;
 	}
 }
