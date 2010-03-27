@@ -13,61 +13,41 @@
 
 #define debug 1
 
-sem_t paddle_started;
+Paddle *paddle;
 
-Input::Input(Paddle *parent, int up_press, int up_release, int down_press, int down_release)
-: cxx::Thread(stack + sizeof(stack))
+void * kbd_consume(void *args)
 {
-	this->parent = parent;
+	// Get keyboard driver.
+	kbd = L4Re::Util::cap_alloc.alloc<void>();
+	if (!kbd.is_valid()) {
+		printf("%04i: Could not get a valid capability slot!\n", __LINE__);
 
-}
+		exit(1);
+	}
+	if (L4Re::Env::env()->names()->query("kbd", kbd)) {
+		printf("%04i: Could not get 'kbd' capability!\n", __LINE__);
 
-void Input::run()
-{
-	#if debug
-	printf("%p: Input thread starting.\n", pthread_self());
-	#endif
-
+		exit(1);
+	}
+	
 	L4::Ipc_iostream ios(l4_utcb());
-	int scancode = 0;
-
-	sem_wait(&paddle_started);
-
-	#if debug
-	printf("Processing input ...\n");
-	#endif
+	int scancode = -1;
+	int last_scancode = -1;
 
 	while (1) {
 		ios.reset();
 		ios.call(kbd.cap(), 0);
 		ios >> scancode;
-
-		if (scancode == up_press) parent->move(-1);
-		if (scancode == up_release) parent->move(0);
-		if (scancode == down_press) parent->move(1);
-		if (scancode == down_release) parent->move(0);
-
-		sleep(1);
+		if (scancode != last_scancode) {
+			paddle->pressed(scancode);
+			last_scancode = scancode;
+		}
 	}
 }
 
 Paddle::Paddle(int velocity, const int up_press, const int up_release, const int down_press, const int down_release)
 : cxx::Thread(stack + sizeof(stack))
 {
-/*	Input *input = new Input(this, up_press, up_release, down_press, down_release);
-	
-	#if debug
-	printf("Input thread created.\n");
-	#endif
-
-	input->start();
-
-	#if debug
-	printf("Input thread started.\n");
-	#endif
-
-	sem_init(&mutex, 0, 1);
-*/
 	l4_msgtag_t err;
 
 
@@ -85,18 +65,6 @@ Paddle::Paddle(int velocity, const int up_press, const int up_release, const int
 	this->down_press = down_press;
 	this->down_release = down_release;
 
-	// Get keyboard driver.
-	kbd = L4Re::Util::cap_alloc.alloc<void>();
-	if (!kbd.is_valid()) {
-		printf("%04i: Could not get a valid capability slot!\n", __LINE__);
-
-		exit(1);
-	}
-	if (L4Re::Env::env()->names()->query("kbd", kbd)) {
-		printf("%04i: Could not get 'kbd' capability!\n", __LINE__);
-
-		exit(1);
-	}
 
 	svr = L4Re::Util::cap_alloc.alloc<void>();
 	if (!svr.is_valid()) {
@@ -143,12 +111,16 @@ int Paddle::lives()
 	return lives;
 }
 
+void Paddle::pressed(int scancode)
+{
+
+}
+
 void Paddle::move(int direction)
 {
-	assert(-1 <= direction && direction <= 1);
-	sem_wait(&mutex);
+	sem_wait(&mtx_direction);
 	this->direction = direction;
-	sem_post(&mutex);
+	sem_post(&mtx_direction);
 }
 
 void Paddle::run()
@@ -157,11 +129,16 @@ void Paddle::run()
 
 	L4::Ipc_iostream ios(l4_utcb());
 
-	clock_t last_tick = clock();
-	clock_t curr_tick = clock();
+	timespec last_tick;
+	timespec curr_tick;
+	clock_gettime(CLOCK_REALTIME, &last_tick);
+	clock_gettime(CLOCK_REALTIME, &curr_tick);
 	double seconds = 0.0;
 
-	int scancode;
+	int scancode = -1;
+	int last_scancode = -1;
+
+	int pressed = -1;
 
 	while (1) {
 		ios.reset();
@@ -175,19 +152,9 @@ void Paddle::run()
 		printf("Scancode %i received.\n", scancode);
 		#endif
 
-		if (scancode == up_press) direction = -1;
-		if (scancode == up_release) direction = 0;
-		if (scancode == down_press) direction = -1;
-		if (scancode == down_release) direction = 0;
-
-		curr_tick = clock();
-		seconds = (curr_tick - last_tick) / CLOCKS_PER_SEC;
-
-		#if debug
-		printf("%i last tick\n%i current tick\n%d seconds since last iteration.\n", last_tick, curr_tick, seconds);
-		#endif
-
-		position += (velocity * direction * seconds);
+		if (scancode == up_press) position -= 10; 
+		if (scancode == down_press) position += 10; 
+			
 		if (position < 0) position = 0;
 		if (position > 1023) position = 1023;
 		
@@ -196,9 +163,7 @@ void Paddle::run()
 		ios.call(paddle);
 		// FIXME Error handling
 
-		last_tick = curr_tick;
-
-		sleep(0.2);
+		usleep(50000);
 	}
 }
 
@@ -212,12 +177,7 @@ int main(int argc, char **argv)
 
 	printf("Paddle starting.\n");
 	
-	sem_init(&paddle_started, 0, 0);
-
-	// FIXME First cast is dirty.
-	Paddle *paddle = new Paddle(atoi(argv[1]), atoi(argv[2]), atoi(argv[3]), atoi(argv[4]), atoi(argv[5]));
-
-	sem_post(&paddle_started);
+	paddle = new Paddle(atoi(argv[1]), atoi(argv[2]), atoi(argv[3]), atoi(argv[4]), atoi(argv[5]));
 
 	paddle->run();
 

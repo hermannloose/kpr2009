@@ -5,25 +5,17 @@
 
 #include <semaphore.h>
 
-class Paddle;
+enum {
+	UP_PRESS, UP_RELEASE, DOWN_PRESS, DOWN_RELEASE
+};
 
-class Input : public cxx::Thread
-{
-	private:
-		Paddle *parent;
-		int up_press, up_release;
-		int down_press, down_release;
-		L4::Cap<void> kbd;
-		char stack[1024];
-	public:
-		Input(Paddle *parent, int up_press, int up_release, int down_press, int down_release);
-		void run();
+enum {
+	NEUTRAL, UP, DOWN
 };
 
 class Paddle : public cxx::Thread
 {
 	private:
-		sem_t mutex;
 		int up_press, up_release;
 		int down_press, down_release;
 		int position;
@@ -31,10 +23,13 @@ class Paddle : public cxx::Thread
 		int direction;
 		L4::Cap<void> kbd;
 		L4::Cap<void> svr;
-		unsigned long paddle;
+		L4::Cap<void> console;
+		unsigned long paddle;	
 
 		char stack[1024];
+
 	public:
+		sem_t mtx_direction;
 		Paddle(int velocity, const int up_press, const int up_release, const int down_press, const int down_release);
 		int lives();
 		void move(int direction);
