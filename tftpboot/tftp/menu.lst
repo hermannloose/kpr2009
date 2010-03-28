@@ -31,7 +31,7 @@ title Mein Pong
   module /conf/kpr.cfg
 	module /conf/kpr_console.cfg
 	module /conf/kpr_pong.cfg
-  vbeset 0x117
+  vbeset 0x118
 
 title Client-Server
   kernel /bin/x86_586/bootstrap
@@ -106,4 +106,18 @@ title Virtual framebuffer test
 	module /bin/x86_586/l4f/test_switcher
 	module /conf/test_fb_muxer.cfg
 	module /conf/test_fb_muxer_loader.cfg
+  vbeset 0x117
+
+title Test recursive loader invocation
+	kernel /bin/x86_586/bootstrap
+	modaddr 0x2000000
+	module /bin/fiasco -serial_esc -jdb_cmd=JS
+	module /bin/x86_586/l4f/sigma0
+	module /bin/x86_586/l4f/moe rom/loader_recursion01.cfg
+	module /bin/x86_586/l4f/l4re
+	module /bin/x86_586/l4f/loader
+	module /bin/x86_586/l4f/fb_muxer
+	module /conf/loader_recursion01.cfg
+	module /conf/loader_recursion02.cfg
+	module /conf/loader_recursion03.cfg
   vbeset 0x117

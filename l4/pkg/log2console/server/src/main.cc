@@ -3,6 +3,8 @@
 
 #include <string>
 
+#define debug 1
+
 static L4Re::Util::Object_registry registry(
 	L4Re::Env::env()->main_thread(),
 	L4Re::Env::env()->factory()
@@ -49,6 +51,8 @@ int Log2Console::dispatch(l4_umword_t obj, L4::Ipc_iostream &ios)
 		}
 	}
 
+	printf("Log message received.\n");
+
 	ios >> opcode;
 
 	if (opcode != 0) {
@@ -67,9 +71,16 @@ int Log2Console::dispatch(l4_umword_t obj, L4::Ipc_iostream &ios)
 			output += actual;
 		}
 
+		#if debug
+		printf("Calling console with message %s.\n", output.c_str());
+		#endif
+
 		ios.reset();
 		ios << L4::Opcode(Opcode::Put) << output.c_str();
-		ios.call(console.cap(), Protocol::Console);
+		l4_msgtag_t result = ios.call(console.cap(), Protocol::Console);
+		if (l4_ipc_error(result, l4_utcb())) {
+			printf("ERROR: Could not print to console!\n");
+		}
 
 		return L4_EOK;
 	}
@@ -77,6 +88,8 @@ int Log2Console::dispatch(l4_umword_t obj, L4::Ipc_iostream &ios)
 
 int main(int argc, char **argv)
 {
+	printf("Starting log2console.\n");
+
 	l4_msgtag_t err;
 
 	Log2Console *log2console = new Log2Console();
@@ -85,11 +98,15 @@ int main(int argc, char **argv)
 
 	registry.register_obj(log2console);
 
-	if (L4Re::Env::env()->names()->register_obj("log", log2console->obj_cap())) {
+	if (L4Re::Env::env()->names()->register_obj("loggate", log2console->obj_cap())) {
 		printf("ERROR: Could not register service, probably read-only namespace?\n");
 
 		exit(1);
 	}
+
+	#if debug
+	printf("Registered service, starting server loop.\n");
+	#endif
 
 	server.loop();
 
