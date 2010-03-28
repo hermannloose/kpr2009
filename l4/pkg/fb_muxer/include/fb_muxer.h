@@ -9,6 +9,7 @@
 #include <l4/sys/types.h>
 
 #include <list>
+#include <semaphore.h>
 
 static const int Switch = 0xf00;
 
@@ -40,6 +41,7 @@ class VFB : public L4::Server_object, public L4Re::Util::Dataspace_svr
 	private:
 		L4::Cap<L4Re::Dataspace> vfb;
 		l4_addr_t vfb_start;
+		sem_t memaccess;
 	public:
 		VFB_fb_svr *fbsvr;
 		VFB(L4Re::Framebuffer::Info info, int size);

@@ -173,6 +173,8 @@ int FBMuxer::switch_to(int which)
 
 VFB::VFB(L4Re::Framebuffer::Info info, int size)
 {
+	sem_init(&memaccess, 0, 1);
+
 	#if debug
 	printf("Creating new VFB.\n");
 	#endif
@@ -229,17 +231,12 @@ VFB::~VFB() throw()
 // Switch back to acting as a virtual framebuffer.
 void VFB::buffer()
 {
+	sem_wait(&memaccess);
+
 	l4_addr_t fb_start = _ds_start;
 	_ds_start = vfb_start;
 
 	printf("VFB @ %p buffering:\n  old DS @ %p\n  new DS @ %p\n", (void*) this, (void*) fb_start, (void*) _ds_start);
-
-	// Copy snapshot of real framebuffer into the virtual one.
-	memcpy((void*) _ds_start, (void*) fb_start, vfb->size());
-	
-	#if debug
-	printf("memcpy %p -> %p (%i bytes)\n", (void*) fb_start, (void*) _ds_start, vfb->size());
-	#endif
 
 	// Unmap all pages in the real framebuffer.
 	l4_addr_t temp = fb_start;
@@ -252,21 +249,25 @@ void VFB::buffer()
 		l4_task_unmap(L4Re::Env::env()->task().cap(), l4_fpage(temp, 21, L4_FPAGE_RWX), L4_FP_OTHER_SPACES);
 		temp += 1024 * 2048;
 	}
+
+	// Copy snapshot of real framebuffer into the virtual one.
+	memcpy((void*) _ds_start, (void*) fb_start, vfb->size());
+	
+	#if debug
+	printf("memcpy %p -> %p (%i bytes)\n", (void*) fb_start, (void*) _ds_start, vfb->size());
+	#endif
+
+	sem_post(&memaccess);
 }
 
 // Forward subsequent memory accesses to the real framebuffer.
 void VFB::write_through(l4_addr_t start)
 {
+	sem_wait(&memaccess);
+	
 	_ds_start = start;
 
 	printf("VFB @ %p forwarding:\n  old DS @ %p\n  new DS @ %p\n", (void*) this, (void*) vfb_start, (void*) _ds_start);
-
-	// Copy snapshot of virtual framebuffer into the real one.
-	memcpy((void*) _ds_start, (void*) vfb_start, vfb->size());
-	
-	#if debug
-	printf("memcpy %p -> %p (%i bytes)\n", (void*) vfb_start, (void*) _ds_start, vfb->size());
-	#endif
 
 	// Unmap all pages in the virtual framebuffer.
 	l4_addr_t temp = vfb_start;
@@ -279,6 +280,15 @@ void VFB::write_through(l4_addr_t start)
 		l4_task_unmap(L4Re::Env::env()->task().cap(), l4_fpage(temp, 21, L4_FPAGE_RWX), L4_FP_OTHER_SPACES);
 		temp += 1024 * 2048;
 	}
+
+	// Copy snapshot of virtual framebuffer into the real one.
+	memcpy((void*) _ds_start, (void*) vfb_start, vfb->size());
+	
+	#if debug
+	printf("memcpy %p -> %p (%i bytes)\n", (void*) vfb_start, (void*) _ds_start, vfb->size());
+	#endif
+
+	sem_post(&memaccess);
 }
 
 // Forward to the default implementation.
@@ -287,6 +297,10 @@ int VFB::dispatch(l4_umword_t obj, L4::Ipc_iostream &ios)
 	#if debug
 	printf("Dataspace_svr dispatching.\n");
 	#endif
+
+	// This will still allow race conditions, albeit fewer.
+	sem_wait(&memaccess);
+	sem_post(&memaccess);
 
 	return L4Re::Util::Dataspace_svr::dispatch(obj, ios);
 };
