@@ -142,15 +142,17 @@ void Paddle::run()
 */
 	while (1) {
 
-		#if debug
-		printf("Scancode %i received.\n", pressed);
-		#endif
-
 		if (pressed == up_press) position -= velocity; 
 		if (pressed == down_press) position += velocity; 
 			
-		if (position < 0) position = 0;
-		if (position > 1023) position = 1023;
+		if (position < 0) {
+			position = 0;
+			printf("Paddle hit upper border!\n");
+		}
+		if (position > 1023) {
+			position = 1023;
+			printf("Paddle hit lower border!\n");
+		}
 		
 		ios.reset();
 		ios << 1UL << position;

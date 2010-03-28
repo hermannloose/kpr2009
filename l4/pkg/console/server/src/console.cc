@@ -78,7 +78,11 @@ Console_server::Console_server(std::string bootmsg)
 
 	history = new std::list<std::string>();
 	history->push_back(bootmsg);
+	window_start = history->begin();
+	
 	render();
+
+	follow = FOLLOW;
 }
 
 int Console_server::dispatch(l4_umword_t obj, L4::Ipc_iostream &ios)
@@ -138,6 +142,10 @@ int Console_server::dispatch(l4_umword_t obj, L4::Ipc_iostream &ios)
 				}
 			}*/
 			history->push_back(str);
+			if (follow == FOLLOW) {
+				window_start++;
+				clear();
+			}
 			render();
 			}
 
@@ -156,35 +164,39 @@ int Console_server::dispatch(l4_umword_t obj, L4::Ipc_iostream &ios)
 			switch (scroll) {
 				case LINE_UP:
 					printf("Scrolling: line up.\n");
-					if (window_start > 0) window_start--;
+					if (window_start != history->begin()) window_start--;
+					follow = NO_FOLLOW;
 					break;
 				case LINE_DOWN:
 					printf("Scrolling: line down.\n");
-					if (window_start < (history->size() - 1)) window_start++;
+					if (window_start != history->end()) window_start++;
 					break;
 				case PAGE_UP:
 					printf("Scrolling: page up.\n");
-					if (window_start >= lines) window_start -= lines;
+					for (int i = 0; i < lines; i++) {
+						if (window_start != history->begin()) window_start--;
+					}
+					follow = NO_FOLLOW;
 					break;
 				case PAGE_DOWN:
 					printf("Scrolling: page down.\n");
-					if (window_start < (history->size() - (2 * lines - 1))) {
-						window_start += lines;
-					} else {
-						window_start = history->size() - (lines + 1);
+					for (int i = 0; i < lines; i++) {
+						if (window_start != history->end()) window_start++;
 					}
 					break;
 				case TOP:
 					printf("Scrolling: top.\n");
-					window_start = 0;
+					window_start = history->begin();
+					follow = NO_FOLLOW;
 					break;
 				case BOTTOM:
 					printf("Scrolling: bottom.\n");
-					window_start = history->size() - 1;
+					window_start = history->end();
 					break;
 				default:
 					break;
 			}
+			if (window_start == history->end()) follow = FOLLOW;
 			clear();
 			render();
 			
@@ -216,12 +228,9 @@ void Console_server::render()
 	int y = 1;
 	int line = 0;
 	std::list<std::string>::iterator iter;
-	for(iter = history->begin(); iter != history->end(); iter++){
-		/*for (int i = 0; i < window_start; i++) {
-			iter++;
-		}*/
+	for(iter = window_start; iter != history->end(); iter++){
 		#if debug
-		std::cout << "[" << *iter << "]";
+		std::cout << "[" << *iter << "]" << std::endl;
 		#endif
 		gfxbitmap_font_text(
 			(void*) base_addr,

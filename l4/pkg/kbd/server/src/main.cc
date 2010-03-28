@@ -42,17 +42,25 @@ static void *poll(void*)
 
 	sem_wait(&driver_started);
 
+	#if debug
 	printf("poll(): Starting to poll ...\n");
+	#endif
 
 	while(1) {
+		#if debug
 		printf("poll(): Waiting on IRQ.\n");
+		#endif
 		
 		irqcap->wait(&label);
+		#if debug
 		printf("poll(): Interrupt received.\n");
+		#endif
 		
 		l4io_request_ioport(0x60, 1);
 		scancode = l4util_in8(0x60);
+		#if 1
 		printf("poll(): Received scancode [%i].\n", scancode);
+		#endif
 		
 		driver->push(scancode);
 	}
@@ -63,7 +71,9 @@ static void *poll(void*)
 static void *queue_worker(void *args)
 {
 	L4::Server<L4::Basic_registry_dispatcher> worker(l4_utcb());
+	#if debug
 	printf("Thread %x starting server loop ...\n", pthread_self());
+	#endif
 	worker.loop();
 	
 	return NULL;
@@ -77,7 +87,9 @@ Kbd_server::Kbd_server()
 
 void Kbd_server::push(int scancode)
 {
+	#if debug
 	printf("Kbd_server: push(): %i\n", scancode);
+	#endif
 	std::list<EventQueue*>::iterator iter;
 	for (iter = queues->begin(); iter != queues->end(); iter++) {
 		(*iter)->push(scancode);
@@ -86,12 +98,16 @@ void Kbd_server::push(int scancode)
 
 int Kbd_server::dispatch(l4_umword_t obj, L4::Ipc_iostream &ios)
 {
+	#if debug
 	printf("[%p] Kbd_server: dispatching.\n", pthread_self());
+	#endif
 	
 	l4_msgtag_t tag;
 	ios >> tag;
 	if (tag.label() != L4Re::Protocol::Service) {
+		#if debug
 		printf("[%p] Kbd_server: unsupported protocol!\n", pthread_self());
+		#endif
 		
 		return -L4_EBADPROTO;
 	}
@@ -101,12 +117,16 @@ int Kbd_server::dispatch(l4_umword_t obj, L4::Ipc_iostream &ios)
 	
 	switch (opcode) {
 		case L4Re::Service_::Open:
+			#if debug
 			printf("[%p] Kbd_server: creating service.\n", pthread_self());
+			#endif
 			{
 				// Create a new worker thread for dispatching in EventQueue.
 				pthread_t worker;
 				pthread_create(&worker, NULL, &queue_worker, NULL);
+				#if debug
 				printf("Worker thread: %x\n", worker);
+				#endif
 
 				L4Re::Util::Object_registry *reg = new L4Re::Util::Object_registry(
 					L4::Cap<L4::Thread>(pthread_getl4cap(worker)),
@@ -114,17 +134,23 @@ int Kbd_server::dispatch(l4_umword_t obj, L4::Ipc_iostream &ios)
 				);
 
 				EventQueue *evq = new EventQueue();
+				#if debug
 				printf("Kbd_server: created EventQueue.\n");
+				#endif
 				
 				sem_wait(&list_access);
 				queues->push_back(evq);
 				sem_post(&list_access);
 			
 				reg->register_obj(evq);
+				#if debug
 				printf("Kbd_server: registered EventQueue.\n");
+				#endif
 
 				ios << evq->obj_cap();
+				#if debug
 				printf("Kbd_server: handing out EventQueue %p.\n", evq);
+				#endif
 			}
 			
 			return L4_EOK;
@@ -147,7 +173,9 @@ EventQueue::EventQueue()
 
 void EventQueue::push(int scancode)
 {
+	#if debug
 	printf("EventQueue: received scancode %i.\n", scancode);
+	#endif
 	
 	sem_wait(&list_access);
 	scancodes->push_back(scancode);
@@ -161,7 +189,9 @@ int EventQueue::dispatch(l4_umword_t obj, L4::Ipc_iostream &ios)
 	l4_msgtag_t tag;
 	ios >> tag;
 	if (tag.label() != 0) {
+		#if debug
 		printf("[%x] EventQueue: unsupported protocol!\n", pthread_self());
+		#endif
 		
 		return -L4_EBADPROTO;
 	}
@@ -194,27 +224,35 @@ int main(int argc, char **argv)
 		printf("Could not get a valid IRQ cap!\n");
 		exit(1);
 	}
+	#if debug
 	printf("Got IRQ cap.\n");
+	#endif
 
 	/* Create IRQ object for the polling thread. */
 	if (l4_error(L4Re::Env::env()->factory()->create_irq(irqcap))) {
 		printf("Could not create IRQ!\n");
 		exit(1);
 	}
+	#if debug
 	printf("Created IRQ.\n");
+	#endif
 	
 	/* Create the polling thread. */
 	if (int err = pthread_create(&poller, NULL, &poll, NULL)) {
 		printf("Could not create polling thread! [%i]!\n", err);
 	}
+	#if debug
 	printf("Created polling thread.\n");
+	#endif
 	
 	/* Attach the polling thread to its IRQ object. */
 	if (l4_error(err = irqcap->attach(0xdeadbeef, 0, L4::Cap<L4::Thread>(pthread_getl4cap(poller))))) {
 		printf("Error while attaching polling thread to IRQ! [%i]\n", err);
 		exit(1);
 	}
+	#if debug
 	printf("Attached polling thread to IRQ.\n");
+	#endif
 
 	/* Get an ICU capability. */
 	icucap = L4Re::Util::cap_alloc.alloc<L4::Icu>();
@@ -222,21 +260,27 @@ int main(int argc, char **argv)
 		printf("Could not get a valid ICU cap!\n");
 		exit(1);
 	}
+	#if debug
 	printf("Got ICU cap.\n");
+	#endif
 
 	/* Associate the hardware ICU with this capability. */
 	if (L4Re::Env::env()->names()->query("icu", icucap)) {
 		printf("Could not get hardware ICU!\n");
 		exit(1);
 	}
+	#if debug
 	printf("Got hardware ICU.\n");
+	#endif
 
 	/* Bind IRQ 0x1 to ICU. */
 	if (l4_error(err = icucap->bind(0x1, irqcap))) {
 		printf("Could not bind IRQ 0x1 to ICU! [%i]\n", err);
 		exit(1);
 	}
+	#if debug
 	printf("Bound to interrupt 0x1 in ICU.\n");
+	#endif
 
 	driver = new Kbd_server();
 
@@ -246,7 +290,9 @@ int main(int argc, char **argv)
 		printf("Could not register service, probably read-only namespace?\n");
 		return 1;
 	}
+	#if debug
 	printf("Registered driver.\n");
+	#endif
 	
 	sem_post(&driver_started);
 

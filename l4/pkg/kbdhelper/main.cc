@@ -1,3 +1,4 @@
+#include <l4/console/console.h>
 #include <l4/fb_muxer/fb_muxer.h>
 
 #include <l4/cxx/ipc_stream>
@@ -70,6 +71,36 @@ int main(int argc, char *args) {
 				ios.reset();
 				ios << L4::Opcode(Switch) << 1;
 				result = ios.call(muxer.cap(), Switch);
+				break;
+			case 71:
+				ios.reset();
+				ios << L4::Opcode(Opcode::Scroll) << TOP;
+				result = ios.call(console.cap(), Protocol::Console);
+				break;
+			case 72:
+				ios.reset();
+				ios << L4::Opcode(Opcode::Scroll) << LINE_UP;
+				result = ios.call(console.cap(), Protocol::Console);
+				break;
+			case 73:
+				ios.reset();
+				ios << L4::Opcode(Opcode::Scroll) << PAGE_UP;
+				result = ios.call(console.cap(), Protocol::Console);
+				break;
+			case 79:
+				ios.reset();
+				ios << L4::Opcode(Opcode::Scroll) << BOTTOM;
+				result = ios.call(console.cap(), Protocol::Console);
+				break;
+			case 80:
+				ios.reset();
+				ios << L4::Opcode(Opcode::Scroll) << LINE_DOWN;
+				result = ios.call(console.cap(), Protocol::Console);
+				break;
+			case 81:
+				ios.reset();
+				ios << L4::Opcode(Opcode::Scroll) << PAGE_DOWN;
+				result = ios.call(console.cap(), Protocol::Console);
 				break;
 			default:
 				break;

@@ -30,7 +30,7 @@ namespace Opcode
 
 enum Scrolling
 {
-	LINE_UP, LINE_DOWN, PAGE_UP, PAGE_DOWN, TOP, BOTTOM
+	LINE_UP, LINE_DOWN, PAGE_UP, PAGE_DOWN, TOP, BOTTOM, FOLLOW, NO_FOLLOW
 };
 
 class Console_server : public L4::Server_object
@@ -47,7 +47,8 @@ class Console_server : public L4::Server_object
 		int font_width;
 		int lines;
 		int chars;
-		int window_start;
+		std::list<std::string>::iterator window_start;
+		int follow;
 		l4_addr_t base_addr;
 		std::list<std::string> *history;
 		void clear();
