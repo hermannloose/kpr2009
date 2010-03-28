@@ -14,18 +14,18 @@
 
 namespace Protocol
 {
-  enum Protocols
-  {
-    Console
-  };
+	enum Protocols
+	{
+		Console
+	};
 };
 
 namespace Opcode
 {
-  enum Opcodes
-  {
-    Put, Refresh, Scroll
-  };
+	enum Opcodes
+	{
+		Put, Refresh, Scroll
+	};
 };
 
 enum Scrolling
@@ -35,23 +35,27 @@ enum Scrolling
 
 class Console_server : public L4::Server_object
 {
-  private:
-    L4::Cap<L4Re::Framebuffer> fb;
-    L4Re::Framebuffer::Info info;
-    gfxbitmap_font_t font;
-    int font_height;
-    int font_width;
-    int lines;
-    int chars;
-    int window_start;
-    l4_addr_t base_addr;
-    std::list<std::string> *history;
+	private:
+		L4::Cap<L4Re::Framebuffer> fb;
+		L4Re::Framebuffer::Info info;
+		L4::Cap<L4Re::Dataspace> ds;
+		// gfx bitmap variables
+		l4re_fb_info_t fbi;
+		gfxbitmap_color_pix_t pixcol;
+		gfxbitmap_font_t font;
+		int font_height;
+		int font_width;
+		int lines;
+		int chars;
+		int window_start;
+		l4_addr_t base_addr;
+		std::list<std::string> *history;
 		void clear();
-    void render();
-  public:
-    Console_server();
+		void render();
+	public:
+		Console_server();
 		Console_server(std::string bootmsg);
-    int dispatch(l4_umword_t obj, L4::Ipc_iostream &ios);
+		int dispatch(l4_umword_t obj, L4::Ipc_iostream &ios);
 };
 
 #endif

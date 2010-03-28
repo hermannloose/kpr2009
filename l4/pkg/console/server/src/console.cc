@@ -2,6 +2,7 @@
 
 #include <l4/libgfxbitmap/font.h>
 
+#include <l4/re/c/fb.h>
 #include <l4/re/fb>
 #include <l4/re/env>
 #include <l4/re/protocols>
@@ -40,7 +41,7 @@ Console_server::Console_server(std::string bootmsg)
 		std::cerr << "Could not get framebuffer info!" << std::endl;
 		exit(1);
 	}
-	L4::Cap<L4Re::Dataspace> ds = L4Re::Util::cap_alloc.alloc<L4Re::Dataspace>();
+	ds = L4Re::Util::cap_alloc.alloc<L4Re::Dataspace>();
 	if(!ds.is_valid()){
 		std::cerr << "Could not get dataspace capability!" << std::endl;
 		exit(1);
@@ -56,12 +57,20 @@ Console_server::Console_server(std::string bootmsg)
 	printf("Initialized framebuffer.\n"); 
 	#endif
 
+	fbi = *((l4re_fb_info_t*) &info);
+
+	pixcol = gfxbitmap_convert_color(&fbi, 0xe07000);
+
 	gfxbitmap_font_init();
 	font = (void*) GFXBITMAP_DEFAULT_FONT;
 	font_height = gfxbitmap_font_height((void*) GFXBITMAP_DEFAULT_FONT);
 	font_width = gfxbitmap_font_width((void*) GFXBITMAP_DEFAULT_FONT);
 	lines = info.y_res / gfxbitmap_font_height((void*) GFXBITMAP_DEFAULT_FONT);
 	chars = info.x_res / gfxbitmap_font_width((void*) GFXBITMAP_DEFAULT_FONT);
+
+	#if debug
+	printf("Console: approximately %i lines x %i chars\n", lines, chars);
+	#endif
 
 	#if debug
 	printf("Rendering boot message.\n");
@@ -167,10 +176,11 @@ int Console_server::dispatch(l4_umword_t obj, L4::Ipc_iostream &ios)
 
 void Console_server::clear()
 {
+	int color = 0;
 	#if debug
-	printf("Clear %p to %p with %06x.\n", base_addr, base_addr + info.mem_total, 0x000000);
+	printf("Clear %p to %p with %06x.\n", base_addr, base_addr + ds->size(), color);
 	#endif
-	memset(&base_addr, 0x000000, info.mem_total);
+	memset((void*) base_addr, color, ds->size());
 }
 
 void Console_server::render()
@@ -178,10 +188,10 @@ void Console_server::render()
 	#if debug
 	std::cout << "=== Rendering ===" << std::endl;
 	#endif
-	//clear();
+	clear();
 	// Start with some padding around the text.
 	int x = 1;
-	int y = 1 + font_height;
+	int y = 1;
 	int line = 0;
 	std::list<std::string>::iterator iter;
 	for(iter = history->begin(); iter != history->end(); iter++){
@@ -192,12 +202,12 @@ void Console_server::render()
 		std::cout << "[" << *iter << "]";
 		#endif
 		gfxbitmap_font_text(
-			&base_addr,
-			(l4re_fb_info_t*) &info,
+			(void*) base_addr,
+			&fbi,
 			(void*) GFXBITMAP_DEFAULT_FONT,
 			iter->c_str(), GFXBITMAP_USE_STRLEN,
 			x, y,
-			0xffffff, 0
+			pixcol, 0
 		);
 		y += font_height + 1;
 		line += 1;
