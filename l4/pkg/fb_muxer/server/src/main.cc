@@ -83,7 +83,7 @@ int FBMuxer::dispatch(l4_umword_t obj, L4::Ipc_iostream &ios)
 		
 		// Fail for any protocol not listed.
 		default:
-			printf("Unsupported protocol!\n");
+			printf("ERROR: Unsupported protocol!\n");
 		
 			return -L4_EBADPROTO;
 	}
@@ -119,13 +119,13 @@ int FBMuxer::dispatch(l4_umword_t obj, L4::Ipc_iostream &ios)
 			{
 				int which;
 				ios >> which;
-
 				switch_to(which);
 			}
 
 			return L4_EOK;
 
 		default:
+			printf("ERROR: Unsupported opcode!\n");
 
 			return -L4_ENOSYS;
 	}

@@ -19,7 +19,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#define debug 1
+#define debug 0
 
 Console_server::Console_server()
 {
@@ -112,13 +112,35 @@ int Console_server::dispatch(l4_umword_t obj, L4::Ipc_iostream &ios)
 	switch(opcode){
 		
 		case Opcode::Put:
+			{
 			char *msg;
 			unsigned long int msg_size;
 			ios >> L4::Ipc_buf_in<char>(msg, msg_size);
-			std::cout << "Received: [" << msg << "]" << std::endl;
-			history->push_back(msg);
+			std::string str(msg);
+			/*std::cout << "Received: [" << str << "]" << std::endl;
+			if (*(str.end()) == ((char) "\n")) str.erase(str.end());
+			// Strip newlines, as they will not display properly.
+			size_t substr_start = 0;
+			size_t substr_end = str.npos;
+			while (1) {
+				#if debug
+				std::cout << "start " << substr_start << " end " << substr_end << " npos " << str.npos << std::endl;
+				#endif
+				substr_end = str.find("\n", substr_start);
+				#if debug
+				std::cout << "start " << substr_start << " end " << substr_end << " npos " << str.npos << std::endl;
+				#endif
+				history->push_back(str.substr(substr_start, substr_end));
+				if (substr_end < str.npos) {
+					substr_start = substr_end + 1;
+				} else {
+					break;
+				}
+			}*/
+			history->push_back(str);
 			render();
-		
+			}
+
 			return L4_EOK;
 
 		case Opcode::Refresh:
@@ -163,6 +185,7 @@ int Console_server::dispatch(l4_umword_t obj, L4::Ipc_iostream &ios)
 				default:
 					break;
 			}
+			clear();
 			render();
 			
 			return L4_EOK;
@@ -188,7 +211,6 @@ void Console_server::render()
 	#if debug
 	std::cout << "=== Rendering ===" << std::endl;
 	#endif
-	clear();
 	// Start with some padding around the text.
 	int x = 1;
 	int y = 1;

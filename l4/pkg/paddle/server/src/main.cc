@@ -18,7 +18,7 @@ Paddle *paddle;
 void * kbd_consume(void *args)
 {
 	// Get keyboard driver.
-	kbd = L4Re::Util::cap_alloc.alloc<void>();
+	L4::Cap<void> kbd = L4Re::Util::cap_alloc.alloc<void>();
 	if (!kbd.is_valid()) {
 		printf("%04i: Could not get a valid capability slot!\n", __LINE__);
 
@@ -39,22 +39,25 @@ void * kbd_consume(void *args)
 		ios.call(kbd.cap(), 0);
 		ios >> scancode;
 		if (scancode != last_scancode) {
-			paddle->pressed(scancode);
+			paddle->press(scancode);
 			last_scancode = scancode;
 		}
 	}
 }
 
 Paddle::Paddle(int velocity, const int up_press, const int up_release, const int down_press, const int down_release)
-: cxx::Thread(stack + sizeof(stack))
 {
 	l4_msgtag_t err;
-
 
 	assert(velocity != 0);
 	this->velocity = velocity;
 	position = 0;
+
 	direction = 0;
+	sem_init(&mtx_direction, 0, 1);
+
+	pressed = -1;
+	sem_init(&mtx_pressed, 0, 1);
 
 	#if debug
 	printf("UP: %i / %i DOWN: %i / %i\n", up_press, up_release, down_press, down_release);
@@ -111,9 +114,11 @@ int Paddle::lives()
 	return lives;
 }
 
-void Paddle::pressed(int scancode)
+void Paddle::press(int scancode)
 {
-
+	sem_wait(&mtx_pressed);
+	this->pressed = scancode;
+	sem_post(&mtx_pressed);
 }
 
 void Paddle::move(int direction)
@@ -128,32 +133,21 @@ void Paddle::run()
 	l4_msgtag_t err;
 
 	L4::Ipc_iostream ios(l4_utcb());
-
+/*
 	timespec last_tick;
 	timespec curr_tick;
 	clock_gettime(CLOCK_REALTIME, &last_tick);
 	clock_gettime(CLOCK_REALTIME, &curr_tick);
 	double seconds = 0.0;
-
-	int scancode = -1;
-	int last_scancode = -1;
-
-	int pressed = -1;
-
+*/
 	while (1) {
-		ios.reset();
-		err = ios.call(kbd.cap(), 0);
-		if (l4_ipc_error(err, l4_utcb())) {
-			printf("Error while reading scancode!\n");
-		}
-		ios >> scancode;
 
 		#if debug
-		printf("Scancode %i received.\n", scancode);
+		printf("Scancode %i received.\n", pressed);
 		#endif
 
-		if (scancode == up_press) position -= 10; 
-		if (scancode == down_press) position += 10; 
+		if (pressed == up_press) position -= velocity; 
+		if (pressed == down_press) position += velocity; 
 			
 		if (position < 0) position = 0;
 		if (position > 1023) position = 1023;
@@ -178,6 +172,13 @@ int main(int argc, char **argv)
 	printf("Paddle starting.\n");
 	
 	paddle = new Paddle(atoi(argv[1]), atoi(argv[2]), atoi(argv[3]), atoi(argv[4]), atoi(argv[5]));
+
+	pthread_t consumer;
+	pthread_create(&consumer, NULL, kbd_consume, NULL);
+
+	#if debug
+	printf("Paddle created.\n");
+	#endif
 
 	paddle->run();
 

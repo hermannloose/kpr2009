@@ -43,7 +43,7 @@ int Log2Console::dispatch(l4_umword_t obj, L4::Ipc_iostream &ios)
 		if (opcode != L4Re::Service_::Open) {
 			printf("ERROR: Unsupported opcode %i!\n", opcode);
 
-			return -L4_ENOSYS;
+			return -L4_ENOREPLY;
 		} else {
 			ios << this->obj_cap();
 
