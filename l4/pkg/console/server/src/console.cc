@@ -13,13 +13,14 @@
 
 #include <iostream>
 #include <list>
+#include <sstream>
 #include <string>
 #include <string.h>
 
 #include <stdio.h>
 #include <stdlib.h>
 
-#define debug 0
+#define debug 1
 
 Console_server::Console_server()
 {
@@ -65,7 +66,8 @@ Console_server::Console_server(std::string bootmsg)
 	font = (void*) GFXBITMAP_DEFAULT_FONT;
 	font_height = gfxbitmap_font_height((void*) GFXBITMAP_DEFAULT_FONT);
 	font_width = gfxbitmap_font_width((void*) GFXBITMAP_DEFAULT_FONT);
-	lines = info.y_res / gfxbitmap_font_height((void*) GFXBITMAP_DEFAULT_FONT);
+	//lines = info.y_res / gfxbitmap_font_height((void*) GFXBITMAP_DEFAULT_FONT);
+	lines = 50;
 	chars = info.x_res / gfxbitmap_font_width((void*) GFXBITMAP_DEFAULT_FONT);
 
 	#if debug
@@ -79,10 +81,27 @@ Console_server::Console_server(std::string bootmsg)
 	history = new std::list<std::string>();
 	history->push_back(bootmsg);
 	window_start = history->begin();
+	window_end = history->end();
+	window_size = 1;
 	
 	render();
 
 	follow = FOLLOW;
+}
+
+void Console_server::print(std::string msg)
+{
+	std::stringstream s;
+	s << history->size() << ": " << msg;
+	
+	history->push_back(s.str());
+	
+	if (window_size < lines) {
+		window_end++;
+		window_size++;
+	}
+
+	if (follow == FOLLOW) scroll(LINE_DOWN);
 }
 
 int Console_server::dispatch(l4_umword_t obj, L4::Ipc_iostream &ios)
@@ -121,31 +140,50 @@ int Console_server::dispatch(l4_umword_t obj, L4::Ipc_iostream &ios)
 			unsigned long int msg_size;
 			ios >> L4::Ipc_buf_in<char>(msg, msg_size);
 			std::string str(msg);
-			/*std::cout << "Received: [" << str << "]" << std::endl;
-			if (*(str.end()) == ((char) "\n")) str.erase(str.end());
+
+			//if (*(str.end()) == 10) str.erase(str.end());
+			
 			// Strip newlines, as they will not display properly.
 			size_t substr_start = 0;
 			size_t substr_end = str.npos;
+			size_t substr_length = 0;
 			while (1) {
 				#if debug
 				std::cout << "start " << substr_start << " end " << substr_end << " npos " << str.npos << std::endl;
 				#endif
+			
 				substr_end = str.find("\n", substr_start);
+
+				substr_length = substr_end - substr_start;
+
 				#if debug
 				std::cout << "start " << substr_start << " end " << substr_end << " npos " << str.npos << std::endl;
 				#endif
-				history->push_back(str.substr(substr_start, substr_end));
+				
+				print(str.substr(substr_start, substr_length));
+
 				if (substr_end < str.npos) {
 					substr_start = substr_end + 1;
+					if (substr_start >= str.size()) break;
 				} else {
 					break;
 				}
-			}*/
-			history->push_back(str);
-			if (follow == FOLLOW) {
-				window_start++;
-				clear();
 			}
+
+			/*history->push_back(str);
+			
+			if (window_size < lines) {
+				window_end++;
+				window_size++;
+				#if debug
+				printf("Increasing window size to %i (of %i lines possible).\n", window_size, lines);
+				#endif
+			}
+
+			if (follow == FOLLOW) {
+				scroll(LINE_DOWN);
+			}*/
+
 			render();
 			}
 
@@ -158,46 +196,11 @@ int Console_server::dispatch(l4_umword_t obj, L4::Ipc_iostream &ios)
 
 		case Opcode::Scroll:
 			
-			int scroll;
-			ios >> scroll;
-			
-			switch (scroll) {
-				case LINE_UP:
-					printf("Scrolling: line up.\n");
-					if (window_start != history->begin()) window_start--;
-					follow = NO_FOLLOW;
-					break;
-				case LINE_DOWN:
-					printf("Scrolling: line down.\n");
-					if (window_start != history->end()) window_start++;
-					break;
-				case PAGE_UP:
-					printf("Scrolling: page up.\n");
-					for (int i = 0; i < lines; i++) {
-						if (window_start != history->begin()) window_start--;
-					}
-					follow = NO_FOLLOW;
-					break;
-				case PAGE_DOWN:
-					printf("Scrolling: page down.\n");
-					for (int i = 0; i < lines; i++) {
-						if (window_start != history->end()) window_start++;
-					}
-					break;
-				case TOP:
-					printf("Scrolling: top.\n");
-					window_start = history->begin();
-					follow = NO_FOLLOW;
-					break;
-				case BOTTOM:
-					printf("Scrolling: bottom.\n");
-					window_start = history->end();
-					break;
-				default:
-					break;
-			}
-			if (window_start == history->end()) follow = FOLLOW;
-			clear();
+			int mode;
+			ios >> mode;
+		
+			scroll(mode);
+
 			render();
 			
 			return L4_EOK;
@@ -226,9 +229,8 @@ void Console_server::render()
 	// Start with some padding around the text.
 	int x = 1;
 	int y = 1;
-	int line = 0;
 	std::list<std::string>::iterator iter;
-	for(iter = window_start; iter != history->end(); iter++){
+	for(iter = window_start; iter != window_end; iter++){
 		#if debug
 		std::cout << "[" << *iter << "]" << std::endl;
 		#endif
@@ -241,12 +243,73 @@ void Console_server::render()
 			pixcol, 0
 		);
 		y += font_height + 1;
-		line += 1;
-		if(y > info.y_res || line >= lines) break;
+		if((y + font_height) > info.y_res) break;
 	}
 	#if debug
 	std::cout << std::endl << "=== Finished! ===" << std::endl;
 	#endif
+}
+
+void Console_server::scroll(int mode)
+{
+	switch (mode) {
+		case TOP:
+			while (window_start != history->begin()) {
+				window_start--;
+				window_end--;
+			}
+			clear();
+			follow = NO_FOLLOW;
+			break;
+		case BOTTOM:
+			while (window_end != history->end()) {
+				window_start++;
+				window_end++;
+			}
+			clear();
+			break;
+		case LINE_UP:
+			if (window_start != history->begin()) {
+				window_start--;
+				window_end--;
+				clear();
+			}
+			follow = NO_FOLLOW;
+			break;
+		case LINE_DOWN:
+			if (window_end != history->end()) {
+				window_start++;
+				window_end++;
+				clear();
+			}
+			break;
+		case PAGE_UP:
+			for (int i = 0; i < lines; i++) {
+				if (window_start != history->begin()) {
+					window_start--;
+					window_end--;
+				} else {
+					if (i > 0) clear();
+					break;
+				}
+			}
+			follow = NO_FOLLOW;
+			break;
+		case PAGE_DOWN:
+			for (int i = 0; i < lines; i++) {
+				if (window_end != history->end()) {
+					window_start++;
+					window_end++;
+				} else {
+					if (i > 0) clear();
+					break;
+				}
+			}
+			break;
+		default:
+			break;
+	}
+	if (window_end == history->end()) follow = FOLLOW;
 }
 
 int main(int argc, char **argv)

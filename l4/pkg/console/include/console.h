@@ -48,11 +48,15 @@ class Console_server : public L4::Server_object
 		int lines;
 		int chars;
 		std::list<std::string>::iterator window_start;
+		std::list<std::string>::iterator window_end;
+		int window_size;
 		int follow;
 		l4_addr_t base_addr;
 		std::list<std::string> *history;
 		void clear();
+		void print(std::string msg);
 		void render();
+		void scroll(int mode);
 	public:
 		Console_server();
 		Console_server(std::string bootmsg);
