@@ -11,6 +11,7 @@
 #include <l4/re/util/object_registry>
 #include <l4/sys/types.h>
 
+#include <assert.h>
 #include <iostream>
 #include <list>
 #include <sstream>
@@ -24,7 +25,7 @@
 
 Console_server::Console_server()
 {
-	Console_server::Console_server("");
+	Console_server::Console_server("Console started.");
 }
 
 Console_server::Console_server(std::string bootmsg)
@@ -80,9 +81,8 @@ Console_server::Console_server(std::string bootmsg)
 
 	history = new std::list<std::string>();
 	history->push_back(bootmsg);
-	window_start = history->begin();
-	window_end = history->end();
-	window_size = 1;
+	window_start = 0;
+	window_end = 1;
 	
 	render();
 
@@ -91,17 +91,22 @@ Console_server::Console_server(std::string bootmsg)
 
 void Console_server::print(std::string msg)
 {
-	std::stringstream s;
-	s << history->size() << ": " << msg;
+	int window_size = window_end - window_start;
+	int old_window_size = window_size;
+	//std::stringstream s;
+	//s << history->size() << ": " << msg;
 	
-	history->push_back(s.str());
+	//history->push_back(s.str());
+	history->push_back(msg);
 	
-	if (window_size < lines) {
+	if ((window_end - window_start) < lines) {
 		window_end++;
-		window_size++;
 	}
 
 	if (follow == FOLLOW) scroll(LINE_DOWN);
+
+	assert(window_start != window_end);
+	assert(window_size >= old_window_size);
 }
 
 int Console_server::dispatch(l4_umword_t obj, L4::Ipc_iostream &ios)
@@ -141,8 +146,6 @@ int Console_server::dispatch(l4_umword_t obj, L4::Ipc_iostream &ios)
 			ios >> L4::Ipc_buf_in<char>(msg, msg_size);
 			std::string str(msg);
 
-			//if (*(str.end()) == 10) str.erase(str.end());
-			
 			// Strip newlines, as they will not display properly.
 			size_t substr_start = 0;
 			size_t substr_end = str.npos;
@@ -169,20 +172,6 @@ int Console_server::dispatch(l4_umword_t obj, L4::Ipc_iostream &ios)
 					break;
 				}
 			}
-
-			/*history->push_back(str);
-			
-			if (window_size < lines) {
-				window_end++;
-				window_size++;
-				#if debug
-				printf("Increasing window size to %i (of %i lines possible).\n", window_size, lines);
-				#endif
-			}
-
-			if (follow == FOLLOW) {
-				scroll(LINE_DOWN);
-			}*/
 
 			render();
 			}
@@ -225,25 +214,37 @@ void Console_server::render()
 {
 	#if debug
 	std::cout << "=== Rendering ===" << std::endl;
+	std::cout << "Window: " << window_start << " to " << window_end << std::endl;
 	#endif
 	// Start with some padding around the text.
 	int x = 1;
 	int y = 1;
-	std::list<std::string>::iterator iter;
-	for(iter = window_start; iter != window_end; iter++){
-		#if debug
-		std::cout << "[" << *iter << "]" << std::endl;
-		#endif
-		gfxbitmap_font_text(
-			(void*) base_addr,
-			&fbi,
-			(void*) GFXBITMAP_DEFAULT_FONT,
-			iter->c_str(), GFXBITMAP_USE_STRLEN,
-			x, y,
-			pixcol, 0
-		);
-		y += font_height + 1;
-		if((y + font_height) > info.y_res) break;
+
+	std::list<std::string>::const_iterator iter = history->begin();
+	// FF to actual view
+	for (int i = 0; i < window_end; i++) {
+		if (i < window_start) {
+			std::cout << "At " << i << " [" << *iter << "], forwarding to " << window_start << std::endl;
+			++iter;
+			continue;
+		} else {
+			#if debug
+			std::cout << "[" << *iter << "]" << std::endl;
+			#endif
+
+			gfxbitmap_font_text(
+				(void*) base_addr,
+				&fbi,
+				(void*) GFXBITMAP_DEFAULT_FONT,
+				iter->c_str(), GFXBITMAP_USE_STRLEN,
+				x, y,
+				pixcol, 0
+			);
+
+			y += font_height + 1;
+			if((y + font_height) > info.y_res) break;
+			++iter;
+		}
 	}
 	#if debug
 	std::cout << std::endl << "=== Finished! ===" << std::endl;
@@ -252,64 +253,54 @@ void Console_server::render()
 
 void Console_server::scroll(int mode)
 {
+	int window_size = window_end - window_start;
 	switch (mode) {
 		case TOP:
-			while (window_start != history->begin()) {
-				window_start--;
-				window_end--;
-			}
+			window_start = 0;
+			window_end = window_start + window_size;
 			clear();
 			follow = NO_FOLLOW;
 			break;
 		case BOTTOM:
-			while (window_end != history->end()) {
-				window_start++;
-				window_end++;
-			}
+			window_end = history->size();
+			window_start = window_end - window_size;
+			if (window_start < 0) window_start = 0;
 			clear();
 			break;
 		case LINE_UP:
-			if (window_start != history->begin()) {
-				window_start--;
-				window_end--;
+			if (window_start > 0) {
+				--window_start;
+				--window_end;
 				clear();
 			}
 			follow = NO_FOLLOW;
 			break;
 		case LINE_DOWN:
-			if (window_end != history->end()) {
-				window_start++;
-				window_end++;
+			if (window_end != history->size()) {
+				++window_start;
+				++window_end;
 				clear();
 			}
 			break;
 		case PAGE_UP:
-			for (int i = 0; i < lines; i++) {
-				if (window_start != history->begin()) {
-					window_start--;
-					window_end--;
-				} else {
-					if (i > 0) clear();
-					break;
-				}
+			if (window_start >= window_size) {
+				window_start -= window_size;
+				window_end -= window_size;
+				clear();
 			}
 			follow = NO_FOLLOW;
 			break;
 		case PAGE_DOWN:
-			for (int i = 0; i < lines; i++) {
-				if (window_end != history->end()) {
-					window_start++;
-					window_end++;
-				} else {
-					if (i > 0) clear();
-					break;
-				}
+			if ((history->size() - window_size) >= window_size) {
+				window_start += window_size;
+				window_end += window_size;
+				clear();
 			}
 			break;
 		default:
 			break;
 	}
-	if (window_end == history->end()) follow = FOLLOW;
+	if (window_end == history->size()) follow = FOLLOW;
 }
 
 int main(int argc, char **argv)

@@ -36,6 +36,8 @@ enum Scrolling
 class Console_server : public L4::Server_object
 {
 	private:
+		// Framebufer
+		l4_addr_t base_addr;
 		L4::Cap<L4Re::Framebuffer> fb;
 		L4Re::Framebuffer::Info info;
 		L4::Cap<L4Re::Dataspace> ds;
@@ -47,12 +49,11 @@ class Console_server : public L4::Server_object
 		int font_width;
 		int lines;
 		int chars;
-		std::list<std::string>::iterator window_start;
-		std::list<std::string>::iterator window_end;
-		int window_size;
-		int follow;
-		l4_addr_t base_addr;
+		// Scrolling
 		std::list<std::string> *history;
+		int window_start;
+		int window_end;
+		int follow;
 		void clear();
 		void print(std::string msg);
 		void render();
