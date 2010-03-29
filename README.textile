@@ -1,25 +1,26 @@
 h1. Notes
 
-This release still includes some packages I built for testing purposes.
+This release still includes some packages built for testing purposes.
 
 The packages comprising my solution for our assignments are the following
-in l4/pkg:
+ in @l4/pkg@:
 
-* console
-* fb_muxer
-* kbd
-* kbdhelper
-* libc_backends
-* log2console
-* paddle
+* @console@
+* @fb_muxer@
+* @kbd@
+* @kbdhelper@
+* @libc_backends@
+* @log2console@
+* @paddle@
 
 The assignment setup is started selecting "Mein Pong" in GRUB.
-This will use the kpr*.cfg files in tftpboot/conf, the other files refer
-to said testing setups.
+
+This will use the @kpr*.cfg@ files in @tftpboot/conf@, the other files refer
+ to said testing setups.
 
 h1. Keys used
 
-* <F1> and <F2> for switching between consoles.
-* <a> and <d> or <w> and <s> for the respective paddles in pong.
-* <PageUp>, <PageDown>, <Up>, <Down>, <Pos1> and <End> for scrolling in the
-console window.
+* @F1@ and @F2@ for switching between consoles.
+* @a@ and @d@ or @w@ and @s@ for the respective paddles in pong.
+* @PageUp@, @PageDown@, @Up@, @Down@, @Pos1@ and @End@ for scrolling in the
+ console window.
