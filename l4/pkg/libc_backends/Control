@@ -1,0 +1,4 @@
+Provides: libc_be_mem libc_be_file_rom libc_be_file 
+          libc_be_l4re libc_support_misc libc_be_fs libc_be_math
+Requires: l4re libpthread libsupc++
+Maintainer: adam@os.inf.tu-dresden.de
