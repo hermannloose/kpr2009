@@ -10,4 +10,6 @@ SRC_CC	= main.cc
 # list requirements of your program here
 REQUIRES_LIBS = 
 
+L4_MULTITHREADED = y
+
 include $(L4DIR)/mk/prog.mk
